@@ -2,6 +2,7 @@
 """
 Chainlink behavioral hook for Claude Code.
 Injects best practice reminders on every prompt submission.
+Loads rules from .chainlink/rules/ markdown files.
 """
 
 import json
@@ -14,6 +15,79 @@ from datetime import datetime
 
 # Fix Windows encoding issues with Unicode characters
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+
+def find_chainlink_dir():
+    """Find the .chainlink directory by walking up from cwd."""
+    current = os.getcwd()
+    for _ in range(10):
+        candidate = os.path.join(current, '.chainlink')
+        if os.path.isdir(candidate):
+            return candidate
+        parent = os.path.dirname(current)
+        if parent == current:
+            break
+        current = parent
+    return None
+
+
+def load_rule_file(rules_dir, filename):
+    """Load a rule file and return its content, or empty string if not found."""
+    if not rules_dir:
+        return ""
+    path = os.path.join(rules_dir, filename)
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return f.read().strip()
+    except (OSError, IOError):
+        return ""
+
+
+def load_all_rules(chainlink_dir):
+    """Load all rule files from .chainlink/rules/."""
+    if not chainlink_dir:
+        return {}, "", ""
+
+    rules_dir = os.path.join(chainlink_dir, 'rules')
+    if not os.path.isdir(rules_dir):
+        return {}, "", ""
+
+    # Load global rules
+    global_rules = load_rule_file(rules_dir, 'global.md')
+
+    # Load project rules
+    project_rules = load_rule_file(rules_dir, 'project.md')
+
+    # Load language-specific rules
+    language_rules = {}
+    language_files = [
+        ('rust.md', 'Rust'),
+        ('python.md', 'Python'),
+        ('javascript.md', 'JavaScript'),
+        ('typescript.md', 'TypeScript'),
+        ('typescript-react.md', 'TypeScript/React'),
+        ('javascript-react.md', 'JavaScript/React'),
+        ('go.md', 'Go'),
+        ('java.md', 'Java'),
+        ('c.md', 'C'),
+        ('cpp.md', 'C++'),
+        ('csharp.md', 'C#'),
+        ('ruby.md', 'Ruby'),
+        ('php.md', 'PHP'),
+        ('swift.md', 'Swift'),
+        ('kotlin.md', 'Kotlin'),
+        ('scala.md', 'Scala'),
+        ('zig.md', 'Zig'),
+        ('odin.md', 'Odin'),
+    ]
+
+    for filename, lang_name in language_files:
+        content = load_rule_file(rules_dir, filename)
+        if content:
+            language_rules[lang_name] = content
+
+    return language_rules, global_rules, project_rules
+
 
 # Detect language from common file extensions in the working directory
 def detect_languages():
@@ -60,141 +134,17 @@ def detect_languages():
     return list(found) if found else ['the project']
 
 
-LANGUAGE_PRACTICES = {
-    'Rust': """
-- Use `?` operator, not `.unwrap()` - propagate errors with `.context()`
-- Prefer `&str` params, `String` for owned data
-- Use `clippy` and `rustfmt`
-- Parameterized SQL queries only (rusqlite `params![]`)
-- No `unsafe` without explicit justification""",
-
-    'Python': """
-- Use type hints for function signatures
-- Handle exceptions properly, don't bare `except:`
-- Use `pathlib` for file paths
-- Use context managers (`with`) for resources
-- Parameterized queries for SQL (never f-strings)""",
-
-    'JavaScript': """
-- Use `const`/`let`, never `var`
-- Proper error handling with try/catch
-- Use async/await over raw promises where cleaner
-- Validate all user input
-- Use parameterized queries for databases""",
-
-    'TypeScript': """
-- Use strict mode, avoid `any` type
-- Define proper interfaces/types
-- Use `const`/`let`, never `var`
-- Proper error handling with try/catch
-- Validate all external data at boundaries""",
-
-    'TypeScript/React': """
-- Use strict mode, avoid `any` type
-- Define proper interfaces for props and state
-- Use functional components with hooks
-- Memoize expensive computations (useMemo, useCallback)
-- Validate props at component boundaries""",
-
-    'JavaScript/React': """
-- Use `const`/`let`, never `var`
-- Use functional components with hooks
-- Proper error boundaries for component errors
-- Memoize expensive computations (useMemo, useCallback)
-- Validate props with PropTypes or runtime checks""",
-
-    'Go': """
-- Always check returned errors
-- Use `context.Context` for cancellation
-- Prefer composition over inheritance
-- Use `defer` for cleanup
-- Validate input, especially from external sources""",
-
-    'Java': """
-- Use try-with-resources for AutoCloseable objects
-- Prefer Optional over null returns
-- Use PreparedStatement for SQL (never string concat)
-- Validate all input parameters
-- Use final for immutable references""",
-
-    'C': """
-- Always check return values (especially malloc, fopen)
-- Free allocated memory, avoid leaks
-- Use bounds checking for arrays/buffers
-- Validate input sizes before operations
-- Use static analysis tools (clang-tidy, cppcheck)""",
-
-    'C++': """
-- Use RAII and smart pointers (unique_ptr, shared_ptr)
-- Prefer references over raw pointers
-- Use const correctness throughout
-- Avoid manual memory management where possible
-- Use static analysis (clang-tidy, cppcheck)""",
-
-    'C#': """
-- Use `using` statements for IDisposable
-- Prefer async/await for I/O operations
-- Use parameterized queries (SqlParameter)
-- Validate input with data annotations
-- Use nullable reference types""",
-
-    'Ruby': """
-- Use blocks for resource cleanup
-- Raise specific exceptions, not generic RuntimeError
-- Use parameterized queries (ActiveRecord placeholders)
-- Validate input with strong parameters
-- Prefer symbols over strings for keys""",
-
-    'PHP': """
-- Use prepared statements (PDO with placeholders)
-- Enable strict_types declaration
-- Use type declarations for parameters/returns
-- Validate and sanitize all user input
-- Use try/catch for error handling""",
-
-    'Swift': """
-- Use guard for early returns
-- Prefer let over var for immutability
-- Use optionals properly (no force unwrap !)
-- Use Result type for error handling
-- Validate input at API boundaries""",
-
-    'Kotlin': """
-- Use val over var for immutability
-- Leverage null safety (avoid !!)
-- Use sealed classes for exhaustive when
-- Use coroutines for async operations
-- Validate input with require/check""",
-
-    'Scala': """
-- Use immutable collections by default
-- Prefer pattern matching over type checks
-- Use Option instead of null
-- Use Either/Try for error handling
-- Validate input at boundaries""",
-
-    'Zig': """
-- Handle all error unions explicitly
-- Use defer for cleanup
-- Prefer slices over pointers
-- Use comptime for compile-time validation
-- Validate input sizes before operations""",
-
-    'Odin': """
-- Check error return values
-- Use defer for cleanup
-- Prefer slices over raw pointers
-- Use explicit memory allocators
-- Validate array bounds before access""",
-}
-
-
-def get_language_section(languages):
-    """Build language-specific best practices section."""
+def get_language_section(languages, language_rules):
+    """Build language-specific best practices section from loaded rules."""
     sections = []
     for lang in languages:
-        if lang in LANGUAGE_PRACTICES:
-            sections.append(f"### {lang} Best Practices{LANGUAGE_PRACTICES[lang]}")
+        if lang in language_rules:
+            content = language_rules[lang]
+            # If the file doesn't start with a header, add one
+            if not content.startswith('#'):
+                sections.append(f"### {lang} Best Practices\n{content}")
+            else:
+                sections.append(content)
 
     if not sections:
         return ""
@@ -388,9 +338,9 @@ def get_dependencies(max_deps=30):
     return ""
 
 
-def build_reminder(languages, project_tree, dependencies):
+def build_reminder(languages, project_tree, dependencies, language_rules, global_rules, project_rules):
     """Build the full reminder context."""
-    lang_section = get_language_section(languages)
+    lang_section = get_language_section(languages, language_rules)
     lang_list = ", ".join(languages) if languages else "this project"
     current_year = datetime.now().year
 
@@ -414,11 +364,13 @@ def build_reminder(languages, project_tree, dependencies):
 ```
 """
 
-    reminder = f"""<chainlink-behavioral-guard>
-## Code Quality Requirements
-
-You are working on a {lang_list} project. Follow these requirements strictly:
-{tree_section}{deps_section}
+    # Build global rules section (from .chainlink/rules/global.md)
+    global_section = ""
+    if global_rules:
+        global_section = f"\n{global_rules}\n"
+    else:
+        # Fallback to hardcoded defaults if no rules file
+        global_section = f"""
 ### Pre-Coding Grounding (PREVENT HALLUCINATIONS)
 Before writing code that uses external libraries, APIs, or unfamiliar patterns:
 1. **VERIFY IT EXISTS**: Use WebSearch to confirm the crate/package/module exists and check its actual API
@@ -462,7 +414,6 @@ NEVER output:
 - Multiple paragraphs when one sentence suffices
 
 When writing code: write it. When making changes: make them. Skip the narration.
-{lang_section}
 
 ### Large File Management (500+ lines)
 If you need to write or modify code that will exceed 500 lines:
@@ -478,6 +429,18 @@ If the conversation is getting long OR the task requires many more steps:
 3. Inform the user: "This task will require additional turns. I've created issue #X to track progress."
 
 Use `chainlink session work <id>` to mark what you're working on.
+"""
+
+    # Build project rules section (from .chainlink/rules/project.md)
+    project_section = ""
+    if project_rules:
+        project_section = f"\n### Project-Specific Rules\n{project_rules}\n"
+
+    reminder = f"""<chainlink-behavioral-guard>
+## Code Quality Requirements
+
+You are working on a {lang_list} project. Follow these requirements strictly:
+{tree_section}{deps_section}{global_section}{lang_section}{project_section}
 </chainlink-behavioral-guard>"""
 
     return reminder
@@ -493,6 +456,10 @@ def main():
     except Exception:
         pass
 
+    # Find chainlink directory and load rules
+    chainlink_dir = find_chainlink_dir()
+    language_rules, global_rules, project_rules = load_all_rules(chainlink_dir)
+
     # Detect languages in the project
     languages = detect_languages()
 
@@ -503,7 +470,7 @@ def main():
     dependencies = get_dependencies()
 
     # Output the reminder as plain text (gets injected as context)
-    print(build_reminder(languages, project_tree, dependencies))
+    print(build_reminder(languages, project_tree, dependencies, language_rules, global_rules, project_rules))
     sys.exit(0)
 
 

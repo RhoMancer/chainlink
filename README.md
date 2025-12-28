@@ -8,11 +8,16 @@ A simple, lean issue tracker CLI designed for AI-assisted development. Track tas
 - **Session management**: Preserve context across Claude/AI sessions with handoff notes
 - **Subissues**: Break large tasks into smaller, trackable pieces
 - **Dependencies**: Track blocking relationships between issues
+- **Related issues**: Link related issues together for context
 - **Labels & priorities**: Organize issues with labels and priority levels
+- **Milestones**: Group issues into milestones/epics for release planning
 - **Time tracking**: Start/stop timers to track time spent on issues
 - **Smart recommendations**: `chainlink next` suggests what to work on based on priority and progress
 - **Tree view**: Visualize issue hierarchy with `chainlink tree`
+- **Export/Import**: Backup and restore issues in JSON format
+- **Issue archiving**: Archive old closed issues to keep the active list clean
 - **Claude Code hooks**: Behavioral guardrails that inject best practices into AI sessions
+- **Customizable rules**: Override default rules via `.chainlink/rules/` markdown files
 - **No sync complexity**: No git hooks, no auto-push, just simple local storage
 
 ## Installation
@@ -85,6 +90,44 @@ chainlink session end --notes "Fixed auth bug, dark mode is next"
 | `chainlink unblock <id> <blocker_id>` | Remove blocking relationship |
 | `chainlink blocked` | List all blocked issues |
 | `chainlink ready` | List issues ready to work on (no blockers) |
+
+### Related Issues
+
+| Command | Description |
+|---------|-------------|
+| `chainlink relate <id1> <id2>` | Link two related issues together |
+| `chainlink unrelate <id1> <id2>` | Remove relationship between issues |
+
+### Milestones
+
+| Command | Description |
+|---------|-------------|
+| `chainlink milestone create <name>` | Create a new milestone |
+| `chainlink milestone create <name> -d "desc"` | Create with description |
+| `chainlink milestone list` | List all milestones |
+| `chainlink milestone show <id>` | Show milestone details and progress |
+| `chainlink milestone add <milestone_id> <issue_id>` | Add an issue to a milestone |
+| `chainlink milestone remove <milestone_id> <issue_id>` | Remove an issue from a milestone |
+| `chainlink milestone close <id>` | Close a milestone |
+| `chainlink milestone reopen <id>` | Reopen a closed milestone |
+
+### Archiving
+
+| Command | Description |
+|---------|-------------|
+| `chainlink archive <id>` | Archive a closed issue |
+| `chainlink unarchive <id>` | Restore an archived issue |
+| `chainlink archived` | List all archived issues |
+| `chainlink archive-older <days>` | Archive issues closed more than N days ago |
+
+### Export/Import
+
+| Command | Description |
+|---------|-------------|
+| `chainlink export` | Export all issues to JSON (stdout) |
+| `chainlink export -o backup.json` | Export to a file |
+| `chainlink import backup.json` | Import issues from JSON file |
+| `chainlink import backup.json --merge` | Merge with existing issues |
 
 ### Smart Navigation
 
@@ -195,13 +238,40 @@ The hooks auto-detect the project language(s) and inject relevant best practices
 - **Python**: Type hints, proper exceptions, `pathlib`, context managers
 - **JavaScript/TypeScript**: `const`/`let`, async/await, strict mode, input validation
 - **Go**: Check errors, use `context.Context`, `defer` for cleanup
+- **Java, C, C++, C#, Ruby, PHP, Swift, Kotlin, Scala, Zig, Odin**: Language-specific best practices
+
+### Customizable Rules
+
+Chainlink ships with sensible default rules that can be customized per-project. Rules are stored in `.chainlink/rules/` as markdown files:
+
+| File | Purpose |
+|------|---------|
+| `global.md` | Behavioral guards (no stubs, error handling, security) |
+| `project.md` | Project-specific rules (your custom rules go here) |
+| `rust.md`, `python.md`, etc. | Language-specific best practices |
+
+To customize rules:
+1. Edit the appropriate file in `.chainlink/rules/`
+2. Changes take effect immediately on the next prompt
+
+To reset rules to defaults:
+```bash
+chainlink init --force
+```
 
 ### Installing Hooks in Other Projects
 
-Copy the `.claude/` directory to any project to enable the hooks:
+Use `chainlink init` in any project to set up hooks and rules:
 
 ```bash
+cd /your/project
+chainlink init
+```
+
+Or copy manually:
+```bash
 cp -r /path/to/chainlink/.claude /your/project/
+cp -r /path/to/chainlink/.chainlink/rules /your/project/.chainlink/
 ```
 
 ## Development

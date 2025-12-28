@@ -3,6 +3,12 @@
 /chainlink-simple/target/
 *.pyc
 __pycache__/
-.chainlink/
+
 beads/
 .claude/settings.local.json
+.chainlink/daemon.pid
+.gitignore
+.chainlink/last_test_run
+.chainlink/daemon.log
+.chainlink/issues.db
+.chainlink/session.json
