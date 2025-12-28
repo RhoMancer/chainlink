@@ -14,6 +14,9 @@
 !LICENSE
 !README.md
 
+# Keep images (icon)
+!images/**
+
 # Ignore source TypeScript (we ship compiled JS)
 src/**
 

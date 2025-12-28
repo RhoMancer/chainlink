@@ -2,8 +2,9 @@
   "name": "chainlink-issue-tracker",
   "displayName": "Chainlink Issue Tracker",
   "description": "A simple, lean issue tracker for AI-assisted development",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "Dollspace-gay",
+  "icon": "images/icon.png",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -104,7 +105,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/chainlink"
+    "url": "https://github.com/dollspace-gay/chainlink"
   },
+  "bugs": {
+    "url": "https://github.com/dollspace-gay/chainlink/issues"
+  },
+  "homepage": "https://github.com/dollspace-gay/chainlink#readme",
   "license": "MIT"
 }
