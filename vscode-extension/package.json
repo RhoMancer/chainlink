@@ -1,0 +1,110 @@
+{
+  "name": "chainlink-issue-tracker",
+  "displayName": "Chainlink Issue Tracker",
+  "description": "A simple, lean issue tracker for AI-assisted development",
+  "version": "0.1.0",
+  "publisher": "Dollspace-gay",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "issue tracker",
+    "task management",
+    "AI development",
+    "session management"
+  ],
+  "activationEvents": [
+    "workspaceContains:.chainlink"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "chainlink.init",
+        "title": "Chainlink: Initialize Project"
+      },
+      {
+        "command": "chainlink.sessionStart",
+        "title": "Chainlink: Start Session"
+      },
+      {
+        "command": "chainlink.sessionEnd",
+        "title": "Chainlink: End Session"
+      },
+      {
+        "command": "chainlink.sessionStatus",
+        "title": "Chainlink: Session Status"
+      },
+      {
+        "command": "chainlink.daemonStart",
+        "title": "Chainlink: Start Daemon"
+      },
+      {
+        "command": "chainlink.daemonStop",
+        "title": "Chainlink: Stop Daemon"
+      },
+      {
+        "command": "chainlink.daemonStatus",
+        "title": "Chainlink: Daemon Status"
+      },
+      {
+        "command": "chainlink.listIssues",
+        "title": "Chainlink: List Issues"
+      },
+      {
+        "command": "chainlink.createIssue",
+        "title": "Chainlink: Create Issue"
+      },
+      {
+        "command": "chainlink.showIssue",
+        "title": "Chainlink: Show Issue Details"
+      }
+    ],
+    "configuration": {
+      "title": "Chainlink Issue Tracker",
+      "properties": {
+        "chainlink.binaryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Override path to the chainlink binary (for development/debugging). Leave empty to use bundled binary."
+        },
+        "chainlink.autoStartDaemon": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the daemon when a .chainlink project is detected."
+        },
+        "chainlink.showOutputChannel": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show output channel for daemon logs."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package",
+    "build:binaries": "node scripts/build-binaries.js"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0",
+    "typescript": "^5.3.0",
+    "@vscode/vsce": "^2.22.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/chainlink"
+  },
+  "license": "MIT"
+}

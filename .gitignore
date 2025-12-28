@@ -12,3 +12,5 @@ beads/
 .chainlink/daemon.log
 .chainlink/issues.db
 .chainlink/session.json
+vscode-extension/bin/chainlink-linux
+vscode-extension/bin/chainlink-win.exe

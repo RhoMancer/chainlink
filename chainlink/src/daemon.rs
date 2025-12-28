@@ -3,6 +3,8 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 use std::process::{Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -110,8 +112,53 @@ pub fn run_daemon(chainlink_dir: &Path) -> Result<()> {
     println!("Watching: {}", chainlink_dir.display());
     println!("Flush interval: {} seconds", FLUSH_INTERVAL_SECS);
 
+    // Zombie prevention: Monitor stdin for closure.
+    // When the parent process (VS Code) dies, stdin will be closed.
+    // This thread detects that and signals the main loop to exit.
+    let should_exit = Arc::new(AtomicBool::new(false));
+    let should_exit_clone = Arc::clone(&should_exit);
+
+    thread::spawn(move || {
+        let mut stdin = std::io::stdin();
+        let mut buf = [0u8; 1];
+        // This will block until stdin is closed or data is received
+        // When the parent dies, read() returns 0 (EOF) or an error
+        loop {
+            match stdin.read(&mut buf) {
+                Ok(0) => {
+                    // EOF - parent closed stdin, time to exit
+                    eprintln!("Stdin closed, daemon shutting down (zombie prevention)");
+                    should_exit_clone.store(true, Ordering::SeqCst);
+                    break;
+                }
+                Err(_) => {
+                    // Error reading stdin - parent likely crashed
+                    eprintln!("Stdin error, daemon shutting down (zombie prevention)");
+                    should_exit_clone.store(true, Ordering::SeqCst);
+                    break;
+                }
+                Ok(_) => {
+                    // Data received (unexpected, but continue)
+                    continue;
+                }
+            }
+        }
+    });
+
     loop {
+        // Check if we should exit (stdin closed)
+        if should_exit.load(Ordering::SeqCst) {
+            println!("Daemon exiting due to parent termination");
+            break;
+        }
+
         thread::sleep(Duration::from_secs(FLUSH_INTERVAL_SECS));
+
+        // Check again after sleep
+        if should_exit.load(Ordering::SeqCst) {
+            println!("Daemon exiting due to parent termination");
+            break;
+        }
 
         // Auto-flush: read current session and write to session.json
         if let Ok(db) = Database::open(&db_path) {
@@ -132,6 +179,8 @@ pub fn run_daemon(chainlink_dir: &Path) -> Result<()> {
             }
         }
     }
+
+    Ok(())
 }
 
 fn read_pid(pid_file: &Path) -> Option<u32> {
