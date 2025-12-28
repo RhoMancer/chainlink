@@ -1,5 +1,6 @@
 /target/
 /chainlink/target/
+/chainlink-simple/target/
 *.pyc
 __pycache__/
 .chainlink/

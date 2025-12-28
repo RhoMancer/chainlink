@@ -3,6 +3,12 @@ use anyhow::Result;
 use crate::db::Database;
 use crate::models::Issue;
 
+/// Progress tuple: (completed subissues, total subissues)
+type Progress = Option<(i32, i32)>;
+
+/// Scored issue with priority score and progress
+type ScoredIssue = (Issue, i32, Progress);
+
 /// Priority order for sorting (higher = more important)
 fn priority_weight(priority: &str) -> i32 {
     match priority {
@@ -15,7 +21,7 @@ fn priority_weight(priority: &str) -> i32 {
 }
 
 /// Calculate progress for issues with subissues
-fn calculate_progress(db: &Database, issue: &Issue) -> Result<Option<(i32, i32)>> {
+fn calculate_progress(db: &Database, issue: &Issue) -> Result<Progress> {
     let subissues = db.get_subissues(issue.id)?;
     if subissues.is_empty() {
         return Ok(None);
@@ -36,7 +42,7 @@ pub fn run(db: &Database) -> Result<()> {
     }
 
     // Score and sort issues
-    let mut scored: Vec<(Issue, i32, Option<(i32, i32)>)> = Vec::new();
+    let mut scored: Vec<ScoredIssue> = Vec::new();
 
     for issue in ready {
         // Skip subissues - we want to recommend parent issues or standalone issues
