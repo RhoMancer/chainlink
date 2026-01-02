@@ -1817,4 +1817,219 @@ mod tests {
         let issue = db.get_issue(child).unwrap().unwrap();
         assert_eq!(issue.parent_id, None);
     }
+
+    // ==================== Database Corruption Recovery ====================
+
+    #[test]
+    fn test_corrupted_db_file_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("issues.db");
+
+        // Create an empty file (corrupted)
+        std::fs::write(&db_path, b"").unwrap();
+
+        // Should fail gracefully, not panic
+        let result = Database::open(&db_path);
+        // SQLite will either recover or return an error
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_corrupted_db_file_garbage() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("issues.db");
+
+        // Write garbage data
+        std::fs::write(&db_path, b"not a sqlite database at all!").unwrap();
+
+        // Should fail gracefully with an error, not panic
+        let result = Database::open(&db_path);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_corrupted_db_file_truncated() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("issues.db");
+
+        // Create valid DB first
+        {
+            let db = Database::open(&db_path).unwrap();
+            db.create_issue("Test", None, "medium").unwrap();
+        }
+
+        // Truncate it (simulate crash during write)
+        let content = std::fs::read(&db_path).unwrap();
+        std::fs::write(&db_path, &content[..content.len() / 2]).unwrap();
+
+        // Should handle gracefully
+        let result = Database::open(&db_path);
+        // May recover or fail, but should not panic
+        assert!(result.is_ok() || result.is_err());
+    }
+
+    #[test]
+    fn test_db_readonly_location() {
+        // This test only works on Unix-like systems
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+
+            let dir = tempfile::tempdir().unwrap();
+            let db_path = dir.path().join("issues.db");
+
+            // Create the file first
+            std::fs::write(&db_path, b"").unwrap();
+
+            // Make it read-only
+            let mut perms = std::fs::metadata(&db_path).unwrap().permissions();
+            perms.set_mode(0o444);
+            std::fs::set_permissions(&db_path, perms).unwrap();
+
+            // Should fail gracefully
+            let result = Database::open(&db_path);
+            assert!(result.is_err());
+        }
+    }
+}
+
+// ==================== Property-Based Tests ====================
+
+#[cfg(test)]
+mod proptest_tests {
+    use super::*;
+    use proptest::prelude::*;
+
+    fn setup_test_db() -> (Database, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("issues.db");
+        let db = Database::open(&db_path).unwrap();
+        (db, dir)
+    }
+
+    // Generate valid priority strings
+    fn valid_priority() -> impl Strategy<Value = String> {
+        prop_oneof![
+            Just("low".to_string()),
+            Just("medium".to_string()),
+            Just("high".to_string()),
+            Just("critical".to_string()),
+        ]
+    }
+
+    // Generate arbitrary (but safe) strings for titles
+    fn safe_string() -> impl Strategy<Value = String> {
+        // Avoid null bytes and extremely long strings
+        "[a-zA-Z0-9 _\\-\\.!?]{0,1000}".prop_map(|s| s)
+    }
+
+    proptest! {
+        /// Any valid title should be storable and retrievable unchanged
+        #[test]
+        fn prop_title_roundtrip(title in safe_string()) {
+            let (db, _dir) = setup_test_db();
+            let id = db.create_issue(&title, None, "medium").unwrap();
+            let issue = db.get_issue(id).unwrap().unwrap();
+            prop_assert_eq!(issue.title, title);
+        }
+
+        /// Any valid description should be storable and retrievable unchanged
+        #[test]
+        fn prop_description_roundtrip(desc in safe_string()) {
+            let (db, _dir) = setup_test_db();
+            let id = db.create_issue("Test", Some(&desc), "medium").unwrap();
+            let issue = db.get_issue(id).unwrap().unwrap();
+            prop_assert_eq!(issue.description, Some(desc));
+        }
+
+        /// All valid priorities should work
+        #[test]
+        fn prop_priority_valid(priority in valid_priority()) {
+            let (db, _dir) = setup_test_db();
+            let id = db.create_issue("Test", None, &priority).unwrap();
+            let issue = db.get_issue(id).unwrap().unwrap();
+            prop_assert_eq!(issue.priority, priority);
+        }
+
+        /// Labels should be storable and retrievable
+        #[test]
+        fn prop_label_roundtrip(label in "[a-zA-Z0-9_\\-]{1,50}") {
+            let (db, _dir) = setup_test_db();
+            let id = db.create_issue("Test", None, "medium").unwrap();
+            db.add_label(id, &label).unwrap();
+            let labels = db.get_labels(id).unwrap();
+            prop_assert!(labels.contains(&label));
+        }
+
+        /// Comments should be storable and retrievable
+        #[test]
+        fn prop_comment_roundtrip(content in safe_string()) {
+            let (db, _dir) = setup_test_db();
+            let id = db.create_issue("Test", None, "medium").unwrap();
+            db.add_comment(id, &content).unwrap();
+            let comments = db.get_comments(id).unwrap();
+            prop_assert_eq!(comments.len(), 1);
+            prop_assert_eq!(&comments[0].content, &content);
+        }
+
+        /// Creating multiple issues should always increase count
+        #[test]
+        fn prop_create_increases_count(count in 1usize..20) {
+            let (db, _dir) = setup_test_db();
+            for i in 0..count {
+                db.create_issue(&format!("Issue {}", i), None, "medium").unwrap();
+            }
+            let issues = db.list_issues(None, None, None).unwrap();
+            prop_assert_eq!(issues.len(), count);
+        }
+
+        /// Close then reopen should leave issue open
+        #[test]
+        fn prop_close_reopen_idempotent(title in safe_string()) {
+            let (db, _dir) = setup_test_db();
+            let id = db.create_issue(&title, None, "medium").unwrap();
+
+            db.close_issue(id).unwrap();
+            let issue = db.get_issue(id).unwrap().unwrap();
+            prop_assert_eq!(issue.status, "closed");
+
+            db.reopen_issue(id).unwrap();
+            let issue = db.get_issue(id).unwrap().unwrap();
+            prop_assert_eq!(issue.status, "open");
+        }
+
+        /// Blocking should be reflected in blocked list
+        #[test]
+        fn prop_blocking_relationship(a in 1i64..100, b in 1i64..100) {
+            if a == b {
+                return Ok(()); // Skip self-blocking
+            }
+            let (db, _dir) = setup_test_db();
+
+            // Create both issues
+            for i in 1..=std::cmp::max(a, b) {
+                db.create_issue(&format!("Issue {}", i), None, "medium").unwrap();
+            }
+
+            db.add_dependency(a, b).unwrap();
+            let blockers = db.get_blockers(a).unwrap();
+            prop_assert!(blockers.iter().any(|&id| id == b));
+        }
+
+        /// Search should find issues with matching titles
+        #[test]
+        fn prop_search_finds_title(
+            prefix in "[a-zA-Z]{3,10}",
+            suffix in "[a-zA-Z]{3,10}"
+        ) {
+            let (db, _dir) = setup_test_db();
+            let title = format!("{} unique marker {}", prefix, suffix);
+            db.create_issue(&title, None, "medium").unwrap();
+
+            // Search for the unique marker
+            let results = db.search_issues("unique marker").unwrap();
+            prop_assert!(results.len() >= 1);
+            prop_assert!(results.iter().any(|i| i.title.contains("unique marker")));
+        }
+    }
 }

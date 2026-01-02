@@ -34,12 +34,10 @@ pub fn list(db: &Database, status: Option<&str>) -> Result<()> {
 }
 
 pub fn show(db: &Database, id: i64) -> Result<()> {
-    let milestone = db.get_milestone(id)?;
-    if milestone.is_none() {
-        bail!("Milestone #{} not found", id);
-    }
-
-    let m = milestone.unwrap();
+    let m = match db.get_milestone(id)? {
+        Some(m) => m,
+        None => bail!("Milestone #{} not found", id),
+    };
     println!("Milestone #{}: {}", m.id, m.name);
     println!("Status: {}", m.status);
     println!("Created: {}", m.created_at.format("%Y-%m-%d %H:%M:%S"));

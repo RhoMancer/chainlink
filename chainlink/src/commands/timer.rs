@@ -5,11 +5,10 @@ use crate::db::Database;
 
 pub fn start(db: &Database, issue_id: i64) -> Result<()> {
     // Verify issue exists
-    let issue = db.get_issue(issue_id)?;
-    if issue.is_none() {
-        bail!("Issue #{} not found", issue_id);
-    }
-    let issue = issue.unwrap();
+    let issue = match db.get_issue(issue_id)? {
+        Some(i) => i,
+        None => bail!("Issue #{} not found", issue_id),
+    };
 
     // Check if there's already an active timer
     if let Some((active_id, _)) = db.get_active_timer()? {
@@ -31,12 +30,10 @@ pub fn start(db: &Database, issue_id: i64) -> Result<()> {
 }
 
 pub fn stop(db: &Database) -> Result<()> {
-    let active = db.get_active_timer()?;
-    if active.is_none() {
-        bail!("No timer running. Start one with 'chainlink start <id>'.");
-    }
-
-    let (issue_id, started_at) = active.unwrap();
+    let (issue_id, started_at) = match db.get_active_timer()? {
+        Some(a) => a,
+        None => bail!("No timer running. Start one with 'chainlink start <id>'."),
+    };
     let duration = Utc::now().signed_duration_since(started_at);
 
     db.stop_timer(issue_id)?;

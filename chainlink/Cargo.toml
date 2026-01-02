@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2021"
 description = "A simple, lean issue tracker CLI"
 
+[lib]
+name = "chainlink"
+path = "src/lib.rs"
+
+[[bin]]
+name = "chainlink"
+path = "src/main.rs"
+
 [dependencies]
 rusqlite = { version = "0.32", features = ["bundled"] }
 clap = { version = "4", features = ["derive"] }
@@ -14,3 +22,5 @@ anyhow = "1"
 
 [dev-dependencies]
 tempfile = "3"
+proptest = "1"
+arbitrary = "1"

@@ -3,12 +3,11 @@ use anyhow::{bail, Result};
 use crate::db::Database;
 
 pub fn archive(db: &Database, id: i64) -> Result<()> {
-    let issue = db.get_issue(id)?;
-    if issue.is_none() {
-        bail!("Issue #{} not found", id);
-    }
+    let issue = match db.get_issue(id)? {
+        Some(i) => i,
+        None => bail!("Issue #{} not found", id),
+    };
 
-    let issue = issue.unwrap();
     if issue.status != "closed" {
         bail!(
             "Can only archive closed issues. Issue #{} is '{}'",
