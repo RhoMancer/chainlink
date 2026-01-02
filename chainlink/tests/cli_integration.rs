@@ -834,7 +834,10 @@ fn test_next_command() {
 
     run_chainlink(dir.path(), &["create", "Low priority", "-p", "low"]);
     run_chainlink(dir.path(), &["create", "High priority", "-p", "high"]);
-    run_chainlink(dir.path(), &["create", "Critical priority", "-p", "critical"]);
+    run_chainlink(
+        dir.path(),
+        &["create", "Critical priority", "-p", "critical"],
+    );
 
     let (success, stdout, _) = run_chainlink(dir.path(), &["next"]);
 
@@ -976,8 +979,10 @@ fn test_create_all_priorities() {
     init_chainlink(dir.path());
 
     for priority in &["low", "medium", "high", "critical"] {
-        let (success, _, _) =
-            run_chainlink(dir.path(), &["create", &format!("{} issue", priority), "-p", priority]);
+        let (success, _, _) = run_chainlink(
+            dir.path(),
+            &["create", &format!("{} issue", priority), "-p", priority],
+        );
         assert!(success, "Failed to create {} priority issue", priority);
     }
 
@@ -994,8 +999,7 @@ fn test_subissue_with_priority() {
     init_chainlink(dir.path());
 
     run_chainlink(dir.path(), &["create", "Parent"]);
-    let (success, _, _) =
-        run_chainlink(dir.path(), &["subissue", "1", "Child", "-p", "critical"]);
+    let (success, _, _) = run_chainlink(dir.path(), &["subissue", "1", "Child", "-p", "critical"]);
 
     assert!(success);
 
@@ -1109,11 +1113,7 @@ fn test_session_multiple_starts() {
 
     // Second start should either warn or start a new session
     assert!(success);
-    assert!(
-        stdout.contains("already")
-            || stdout.contains("Session")
-            || stdout.contains("started")
-    );
+    assert!(stdout.contains("already") || stdout.contains("Session") || stdout.contains("started"));
 }
 
 // ==================== Additional Next Edge Cases ====================
@@ -1132,9 +1132,7 @@ fn test_next_with_blocked_issues() {
     assert!(success);
     // Should suggest the blocker, not the blocked issue
     assert!(
-        stdout.contains("Blocker")
-            || stdout.contains("#2")
-            || !stdout.contains("Blocked issue")
+        stdout.contains("Blocker") || stdout.contains("#2") || !stdout.contains("Blocked issue")
     );
 }
 
@@ -1275,10 +1273,7 @@ fn test_update_description() {
     init_chainlink(dir.path());
 
     run_chainlink(dir.path(), &["create", "Issue"]);
-    let (success, _, _) = run_chainlink(
-        dir.path(),
-        &["update", "1", "-d", "New description"],
-    );
+    let (success, _, _) = run_chainlink(dir.path(), &["update", "1", "-d", "New description"]);
 
     assert!(success);
 
@@ -1585,10 +1580,8 @@ fn test_import_with_parent_relationships() {
     std::fs::copy(&export_path, dir2.path().join("import.json")).unwrap();
 
     let import_path = dir2.path().join("import.json");
-    let (success, stdout, _) = run_chainlink(
-        dir2.path(),
-        &["import", import_path.to_str().unwrap()],
-    );
+    let (success, stdout, _) =
+        run_chainlink(dir2.path(), &["import", import_path.to_str().unwrap()]);
 
     assert!(success);
     assert!(stdout.contains("Imported") || stdout.contains("import"));
@@ -1624,10 +1617,7 @@ fn test_import_with_labels_and_comments() {
     std::fs::copy(&export_path, dir2.path().join("import.json")).unwrap();
 
     let import_path = dir2.path().join("import.json");
-    let (success, _, _) = run_chainlink(
-        dir2.path(),
-        &["import", import_path.to_str().unwrap()],
-    );
+    let (success, _, _) = run_chainlink(dir2.path(), &["import", import_path.to_str().unwrap()]);
 
     assert!(success);
 
@@ -1965,7 +1955,9 @@ fn test_create_invalid_priority() {
     let (success, _, stderr) = run_chainlink(dir.path(), &["create", "Issue", "-p", "invalid"]);
 
     assert!(!success);
-    assert!(stderr.contains("Invalid") || stderr.contains("priority") || stderr.contains("invalid"));
+    assert!(
+        stderr.contains("Invalid") || stderr.contains("priority") || stderr.contains("invalid")
+    );
 }
 
 // --- create.rs: Unknown template ---
@@ -1977,7 +1969,9 @@ fn test_create_unknown_template() {
     let (success, _, stderr) = run_chainlink(dir.path(), &["create", "Issue", "-t", "unknown"]);
 
     assert!(!success);
-    assert!(stderr.contains("Unknown") || stderr.contains("template") || stderr.contains("unknown"));
+    assert!(
+        stderr.contains("Unknown") || stderr.contains("template") || stderr.contains("unknown")
+    );
 }
 
 // --- block.rs: Error cases ---
@@ -2022,11 +2016,7 @@ fn test_session_status_deleted_issue() {
 
     assert!(success);
     // Should show issue not found or empty working status
-    assert!(
-        stdout.contains("not found")
-            || stdout.contains("#1")
-            || stdout.contains("Session")
-    );
+    assert!(stdout.contains("not found") || stdout.contains("#1") || stdout.contains("Session"));
 }
 
 // --- show.rs: Show with related issues ---
@@ -2042,11 +2032,7 @@ fn test_show_with_related_issues() {
     let (success, stdout, _) = run_chainlink(dir.path(), &["show", "1"]);
 
     assert!(success);
-    assert!(
-        stdout.contains("Related")
-            || stdout.contains("#2")
-            || stdout.contains("Main issue")
-    );
+    assert!(stdout.contains("Related") || stdout.contains("#2") || stdout.contains("Main issue"));
 }
 
 // --- milestone.rs: Edge cases ---
@@ -2061,7 +2047,12 @@ fn test_milestone_add_nonexistent_issue() {
 
     // Command succeeds but warns about nonexistent issue
     assert!(success);
-    assert!(stdout.contains("not found") || stdout.contains("999") || stdout.contains("Warning") || stdout.contains("skipping"));
+    assert!(
+        stdout.contains("not found")
+            || stdout.contains("999")
+            || stdout.contains("Warning")
+            || stdout.contains("skipping")
+    );
 }
 
 #[test]
@@ -2107,7 +2098,8 @@ fn test_stress_very_long_description() {
 
     // Use 5000 chars - safe for Windows command line limits
     let long_desc = "B".repeat(5000);
-    let (success, _, _) = run_chainlink(dir.path(), &["create", "Long desc issue", "-d", &long_desc]);
+    let (success, _, _) =
+        run_chainlink(dir.path(), &["create", "Long desc issue", "-d", &long_desc]);
 
     assert!(success);
 
@@ -2349,7 +2341,10 @@ fn test_integrity_export_import_roundtrip() {
     init_chainlink(dir.path());
 
     // Create complex data
-    run_chainlink(dir.path(), &["create", "Parent", "-p", "high", "-d", "Parent desc"]);
+    run_chainlink(
+        dir.path(),
+        &["create", "Parent", "-p", "high", "-d", "Parent desc"],
+    );
     run_chainlink(dir.path(), &["subissue", "1", "Child"]);
     run_chainlink(dir.path(), &["label", "1", "important"]);
     run_chainlink(dir.path(), &["comment", "1", "Test comment"]);
