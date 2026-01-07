@@ -390,16 +390,9 @@ async function installToUserBin(extensionPath: string, output: vscode.OutputChan
 
         const targetPath = path.join(binDir, targetName);
 
-        // Check if we need to update (skip if same version already installed)
+        // Always overwrite to ensure latest version
         if (fs.existsSync(targetPath)) {
-            const sourceStats = fs.statSync(sourceBinary);
-            const targetStats = fs.statSync(targetPath);
-
-            // Skip if same size (likely same version)
-            if (sourceStats.size === targetStats.size) {
-                output.appendLine(`Chainlink already installed at ${targetPath}`);
-                return true;
-            }
+            output.appendLine(`Updating chainlink at ${targetPath}`);
         }
 
         // Copy binary to user bin
