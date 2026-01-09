@@ -59,6 +59,8 @@ function checkCommand(cmd) {
 
 function buildWindows() {
     console.log('\n=== Building Windows binary ===');
+    console.log('Cleaning previous build...');
+    run('cargo clean', { cwd: CHAINLINK_DIR });
     const success = run('cargo build --release', { cwd: CHAINLINK_DIR });
     if (success) {
         const src = path.join(CHAINLINK_DIR, 'target', 'release', 'chainlink.exe');
@@ -76,7 +78,9 @@ function buildLinux() {
     console.log('\n=== Building Linux binary ===');
 
     if (process.platform === 'win32') {
-        // Build via WSL
+        // Clean and build via WSL
+        console.log('Cleaning previous Linux build...');
+        run('wsl -d FedoraLinux-42 -- bash -c "source ~/.cargo/env && cd /mnt/c/Users/texas/chainlink/chainlink/chainlink && cargo clean"');
         const wslCmd = 'wsl -d FedoraLinux-42 -- bash -c "source ~/.cargo/env && cd /mnt/c/Users/texas/chainlink/chainlink/chainlink && cargo build --release"';
         const success = run(wslCmd);
         if (success) {
@@ -92,6 +96,8 @@ function buildLinux() {
         return false;
     } else {
         // Native Linux build
+        console.log('Cleaning previous build...');
+        run('cargo clean', { cwd: CHAINLINK_DIR });
         const success = run('cargo build --release', { cwd: CHAINLINK_DIR });
         if (success) {
             const src = path.join(CHAINLINK_DIR, 'target', 'release', 'chainlink');
@@ -125,6 +131,10 @@ function buildMacOS() {
 
     let x64Ok = false;
     let arm64Ok = false;
+
+    // Clean macOS targets first
+    console.log('\n--- Cleaning macOS targets ---');
+    run(`docker run --platform=linux/amd64 -v "${dockerWorkspace}:/workspace" --rm ${DOCKER_IMAGE} bash -c "cd /workspace/chainlink && cargo clean --target aarch64-apple-darwin --target x86_64-apple-darwin 2>/dev/null || true"`);
 
     // Build for aarch64 (Apple Silicon M1/M2/M3)
     console.log('\n--- Building for aarch64-apple-darwin ---');
@@ -177,6 +187,8 @@ function main() {
     } else if (process.platform === 'darwin') {
         // Native macOS build
         console.log('\n=== Building macOS binary (native) ===');
+        console.log('Cleaning previous build...');
+        run('cargo clean', { cwd: CHAINLINK_DIR });
         const success = run('cargo build --release', { cwd: CHAINLINK_DIR });
         if (success) {
             const src = path.join(CHAINLINK_DIR, 'target', 'release', 'chainlink');
