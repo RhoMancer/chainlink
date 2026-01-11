@@ -1,0 +1,10 @@
+node_modules/
+out/
+*.vsix
+.vscode-test/
+build-linux.sh
+
+# macOS binaries - generated during build, not tracked in git
+bin/chainlink-darwin
+bin/chainlink-darwin-arm64
+bin/*
