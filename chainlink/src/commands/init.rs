@@ -12,6 +12,13 @@ const POST_EDIT_CHECK_PY: &str = include_str!("../../../.claude/hooks/post-edit-
 const SESSION_START_PY: &str = include_str!("../../../.claude/hooks/session-start.py");
 const PRE_WEB_CHECK_PY: &str = include_str!("../../../.claude/hooks/pre-web-check.py");
 
+// Embed MCP server for safe web fetching
+const SAFE_FETCH_SERVER_PY: &str = include_str!("../../../.claude/mcp/safe-fetch-server.py");
+const MCP_JSON: &str = include_str!("../../../.mcp.json");
+
+// Embed sanitization patterns
+const SANITIZE_PATTERNS: &str = include_str!("../../../.chainlink/rules/sanitize-patterns.txt");
+
 // Embed rule files at compile time
 // Path: chainlink/src/commands/init.rs -> ../../../.chainlink/rules/
 const RULE_GLOBAL: &str = include_str!("../../../.chainlink/rules/global.md");
@@ -63,6 +70,7 @@ const RULE_FILES: &[(&str, &str)] = &[
     ("elixir.md", RULE_ELIXIR),
     ("elixir-phoenix.md", RULE_ELIXIR_PHOENIX),
     ("web.md", RULE_WEB),
+    ("sanitize-patterns.txt", SANITIZE_PATTERNS),
 ];
 
 pub fn run(path: &Path, force: bool) -> Result<()> {
@@ -128,6 +136,16 @@ pub fn run(path: &Path, force: bool) -> Result<()> {
 
         fs::write(hooks_dir.join("pre-web-check.py"), PRE_WEB_CHECK_PY)
             .context("Failed to write pre-web-check.py")?;
+
+        // Create MCP server directory and write safe-fetch server
+        let mcp_dir = claude_dir.join("mcp");
+        fs::create_dir_all(&mcp_dir).context("Failed to create .claude/mcp directory")?;
+        fs::write(mcp_dir.join("safe-fetch-server.py"), SAFE_FETCH_SERVER_PY)
+            .context("Failed to write safe-fetch-server.py")?;
+
+        // Write .mcp.json to project root
+        fs::write(path.join(".mcp.json"), MCP_JSON)
+            .context("Failed to write .mcp.json")?;
 
         if force && claude_exists {
             println!("Updated {} with latest hooks", claude_dir.display());
