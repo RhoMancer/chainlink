@@ -75,16 +75,20 @@ function buildWindows() {
 }
 
 function buildLinux() {
-    console.log('\n=== Building Linux binary ===');
+    console.log('\n=== Building Linux binary (musl static linking) ===');
+
+    const MUSL_TARGET = 'x86_64-unknown-linux-musl';
 
     if (process.platform === 'win32') {
-        // Clean and build via WSL
+        // Clean and build via WSL with musl target for static linking
         console.log('Cleaning previous Linux build...');
-        run('wsl -d FedoraLinux-42 -- bash -c "source ~/.cargo/env && cd /mnt/c/Users/texas/chainlink/chainlink/chainlink && cargo clean"');
-        const wslCmd = 'wsl -d FedoraLinux-42 -- bash -c "source ~/.cargo/env && cd /mnt/c/Users/texas/chainlink/chainlink/chainlink && cargo build --release"';
+        run(`wsl -d FedoraLinux-42 -- bash -c "source ~/.cargo/env && cd /mnt/c/Users/texas/chainlink/chainlink/chainlink && cargo clean --target ${MUSL_TARGET} 2>/dev/null || true"`);
+        console.log('Ensuring musl target is installed...');
+        run(`wsl -d FedoraLinux-42 -- bash -c "source ~/.cargo/env && rustup target add ${MUSL_TARGET}"`);
+        const wslCmd = `wsl -d FedoraLinux-42 -- bash -c "source ~/.cargo/env && cd /mnt/c/Users/texas/chainlink/chainlink/chainlink && cargo build --release --target ${MUSL_TARGET}"`;
         const success = run(wslCmd);
         if (success) {
-            const src = path.join(CHAINLINK_DIR, 'target', 'release', 'chainlink');
+            const src = path.join(CHAINLINK_DIR, 'target', MUSL_TARGET, 'release', 'chainlink');
             const dest = path.join(BIN_DIR, 'chainlink-linux');
             if (fs.existsSync(src)) {
                 fs.copyFileSync(src, dest);
@@ -95,12 +99,14 @@ function buildLinux() {
         }
         return false;
     } else {
-        // Native Linux build
+        // Native Linux build with musl target for static linking
         console.log('Cleaning previous build...');
-        run('cargo clean', { cwd: CHAINLINK_DIR });
-        const success = run('cargo build --release', { cwd: CHAINLINK_DIR });
+        run(`cargo clean --target ${MUSL_TARGET}`, { cwd: CHAINLINK_DIR });
+        console.log('Ensuring musl target is installed...');
+        run(`rustup target add ${MUSL_TARGET}`);
+        const success = run(`cargo build --release --target ${MUSL_TARGET}`, { cwd: CHAINLINK_DIR });
         if (success) {
-            const src = path.join(CHAINLINK_DIR, 'target', 'release', 'chainlink');
+            const src = path.join(CHAINLINK_DIR, 'target', MUSL_TARGET, 'release', 'chainlink');
             const dest = path.join(BIN_DIR, 'chainlink-linux');
             if (fs.existsSync(src)) {
                 fs.copyFileSync(src, dest);
