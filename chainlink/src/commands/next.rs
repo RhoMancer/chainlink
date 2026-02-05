@@ -93,7 +93,7 @@ pub fn run(db: &Database) -> Result<()> {
     if let Some(desc) = &top.description {
         if !desc.is_empty() {
             let preview: String = desc.chars().take(80).collect();
-            let suffix = if desc.len() > 80 { "..." } else { "" };
+            let suffix = if desc.chars().count() > 80 { "..." } else { "" };
             println!("       {}{}", preview, suffix);
         }
     }

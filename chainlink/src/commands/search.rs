@@ -37,7 +37,7 @@ pub fn run(db: &Database, query: &str) -> Result<()> {
         if let Some(ref desc) = issue.description {
             if desc.to_lowercase().contains(&query.to_lowercase()) {
                 let preview: String = desc.chars().take(60).collect();
-                let suffix = if desc.len() > 60 { "..." } else { "" };
+                let suffix = if desc.chars().count() > 60 { "..." } else { "" };
                 println!("      └─ {}{}", preview.replace('\n', " "), suffix);
             }
         }

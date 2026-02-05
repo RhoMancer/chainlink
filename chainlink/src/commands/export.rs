@@ -101,6 +101,7 @@ pub fn run_markdown(db: &Database, output_path: Option<&str>) -> Result<()> {
     // Group by status
     let open: Vec<_> = issues.iter().filter(|i| i.status == "open").collect();
     let closed: Vec<_> = issues.iter().filter(|i| i.status == "closed").collect();
+    let archived: Vec<_> = issues.iter().filter(|i| i.status == "archived").collect();
 
     if !open.is_empty() {
         md.push_str("## Open Issues\n\n");
@@ -112,6 +113,13 @@ pub fn run_markdown(db: &Database, output_path: Option<&str>) -> Result<()> {
     if !closed.is_empty() {
         md.push_str("## Closed Issues\n\n");
         for issue in &closed {
+            write_issue_md(&mut md, db, issue)?;
+        }
+    }
+
+    if !archived.is_empty() {
+        md.push_str("## Archived Issues\n\n");
+        for issue in &archived {
             write_issue_md(&mut md, db, issue)?;
         }
     }

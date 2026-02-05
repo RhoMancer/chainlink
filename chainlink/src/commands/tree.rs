@@ -20,11 +20,23 @@ fn print_issue(issue: &Issue, indent: usize) {
     );
 }
 
-fn print_tree_recursive(db: &Database, parent_id: i64, indent: usize) -> Result<()> {
+fn print_tree_recursive(
+    db: &Database,
+    parent_id: i64,
+    indent: usize,
+    status_filter: Option<&str>,
+) -> Result<()> {
     let subissues = db.get_subissues(parent_id)?;
     for sub in subissues {
+        let dominated_by_filter = match status_filter {
+            Some("all") | None => false,
+            Some(filter) => sub.status != filter,
+        };
+        if dominated_by_filter {
+            continue;
+        }
         print_issue(&sub, indent);
-        print_tree_recursive(db, sub.id, indent + 1)?;
+        print_tree_recursive(db, sub.id, indent + 1, status_filter)?;
     }
     Ok(())
 }
@@ -44,7 +56,7 @@ pub fn run(db: &Database, status_filter: Option<&str>) -> Result<()> {
 
     for issue in top_level {
         print_issue(&issue, 0);
-        print_tree_recursive(db, issue.id, 1)?;
+        print_tree_recursive(db, issue.id, 1, status_filter)?;
     }
 
     // Legend

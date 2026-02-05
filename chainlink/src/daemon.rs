@@ -30,14 +30,18 @@ pub fn start(chainlink_dir: &Path) -> Result<()> {
     let exe = std::env::current_exe().context("Failed to get executable path")?;
 
     // Spawn the daemon process
+    let log_handle = fs::File::create(&log_file).context("Failed to create log file")?;
+    let log_handle_err = log_handle
+        .try_clone()
+        .context("Failed to clone log file handle")?;
     let child = Command::new(&exe)
         .arg("daemon")
         .arg("run")
         .arg("--dir")
         .arg(chainlink_dir)
         .stdin(Stdio::null())
-        .stdout(fs::File::create(&log_file).context("Failed to create log file")?)
-        .stderr(fs::File::create(&log_file).context("Failed to create log file")?)
+        .stdout(log_handle)
+        .stderr(log_handle_err)
         .spawn()
         .context("Failed to spawn daemon process")?;
 

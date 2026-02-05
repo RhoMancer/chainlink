@@ -791,19 +791,23 @@ impl Database {
     }
 
     pub fn list_milestones(&self, status: Option<&str>) -> Result<Vec<crate::models::Milestone>> {
-        let sql = if let Some(s) = status {
+        let (sql, params_vec): (&str, Vec<Box<dyn rusqlite::ToSql>>) = if let Some(s) = status {
             if s == "all" {
-                "SELECT id, name, description, status, created_at, closed_at FROM milestones ORDER BY id DESC".to_string()
+                ("SELECT id, name, description, status, created_at, closed_at FROM milestones ORDER BY id DESC", vec![])
             } else {
-                format!("SELECT id, name, description, status, created_at, closed_at FROM milestones WHERE status = '{}' ORDER BY id DESC", s)
+                ("SELECT id, name, description, status, created_at, closed_at FROM milestones WHERE status = ?1 ORDER BY id DESC",
+                 vec![Box::new(s.to_string())])
             }
         } else {
-            "SELECT id, name, description, status, created_at, closed_at FROM milestones WHERE status = 'open' ORDER BY id DESC".to_string()
+            ("SELECT id, name, description, status, created_at, closed_at FROM milestones WHERE status = ?1 ORDER BY id DESC",
+             vec![Box::new("open".to_string())])
         };
 
-        let mut stmt = self.conn.prepare(&sql)?;
+        let params_refs: Vec<&dyn rusqlite::ToSql> =
+            params_vec.iter().map(|p| p.as_ref()).collect();
+        let mut stmt = self.conn.prepare(sql)?;
         let milestones = stmt
-            .query_map([], |row| {
+            .query_map(params_refs.as_slice(), |row| {
                 Ok(crate::models::Milestone {
                     id: row.get(0)?,
                     name: row.get(1)?,

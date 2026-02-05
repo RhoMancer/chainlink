@@ -16,6 +16,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `--no-changelog` flag to skip changelog entry for internal work
 - `chainlink export` now outputs to stdout by default, use `-o` for file output
 
+### Fixed
+- Fix SQL injection vulnerability in milestone listing (#97)
+- Fix cargo-mutants artifact left in production code (#97)
+- Fix byte/char length mismatch for Unicode text truncation (#97)
+- Fix tree view not filtering subissues by status (#97)
+- Fix markdown export silently dropping archived issues (#97)
+- Fix daemon log file corruption from duplicate file handles (#97)
+
 ### Changed
 - Fix wrong assertion directions and tautological property tests (#96)
 - Fix overly loose CLI integration test assertions (#95)
