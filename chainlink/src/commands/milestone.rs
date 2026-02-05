@@ -143,22 +143,26 @@ mod tests {
     #[test]
     fn test_create_milestone() {
         let (db, _dir) = setup_test_db();
-        let result = create(&db, "v1.0", None);
-        assert!(result.is_ok());
+        create(&db, "v1.0", None).unwrap();
+        let milestones = db.list_milestones(None).unwrap();
+        assert_eq!(milestones.len(), 1);
+        assert_eq!(milestones[0].name, "v1.0");
     }
 
     #[test]
     fn test_create_milestone_with_description() {
         let (db, _dir) = setup_test_db();
-        let result = create(&db, "v1.0", Some("First release"));
-        assert!(result.is_ok());
+        create(&db, "v1.0", Some("First release")).unwrap();
+        let milestones = db.list_milestones(None).unwrap();
+        assert_eq!(milestones[0].description, Some("First release".to_string()));
     }
 
     #[test]
     fn test_list_milestones_empty() {
         let (db, _dir) = setup_test_db();
-        let result = list(&db, None);
-        assert!(result.is_ok());
+        list(&db, None).unwrap();
+        let milestones = db.list_milestones(None).unwrap();
+        assert!(milestones.is_empty());
     }
 
     #[test]
@@ -166,16 +170,19 @@ mod tests {
         let (db, _dir) = setup_test_db();
         db.create_milestone("v1.0", None).unwrap();
         db.create_milestone("v2.0", None).unwrap();
-        let result = list(&db, None);
-        assert!(result.is_ok());
+        list(&db, None).unwrap();
+        let milestones = db.list_milestones(None).unwrap();
+        assert_eq!(milestones.len(), 2);
     }
 
     #[test]
     fn test_show_milestone() {
         let (db, _dir) = setup_test_db();
         let id = db.create_milestone("v1.0", Some("Description")).unwrap();
-        let result = show(&db, id);
-        assert!(result.is_ok());
+        show(&db, id).unwrap();
+        let m = db.get_milestone(id).unwrap().unwrap();
+        assert_eq!(m.name, "v1.0");
+        assert_eq!(m.description, Some("Description".to_string()));
     }
 
     #[test]
@@ -183,6 +190,7 @@ mod tests {
         let (db, _dir) = setup_test_db();
         let result = show(&db, 99999);
         assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
     }
 
     #[test]
@@ -190,8 +198,10 @@ mod tests {
         let (db, _dir) = setup_test_db();
         let milestone_id = db.create_milestone("v1.0", None).unwrap();
         let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
-        let result = add(&db, milestone_id, &[issue_id]);
-        assert!(result.is_ok());
+        add(&db, milestone_id, &[issue_id]).unwrap();
+        let issues = db.get_milestone_issues(milestone_id).unwrap();
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].id, issue_id);
     }
 
     #[test]
@@ -208,24 +218,28 @@ mod tests {
         let milestone_id = db.create_milestone("v1.0", None).unwrap();
         let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
         db.add_issue_to_milestone(milestone_id, issue_id).unwrap();
-        let result = remove(&db, milestone_id, issue_id);
-        assert!(result.is_ok());
+        remove(&db, milestone_id, issue_id).unwrap();
+        let issues = db.get_milestone_issues(milestone_id).unwrap();
+        assert!(issues.is_empty(), "Issue should be removed from milestone");
     }
 
     #[test]
     fn test_close_milestone() {
         let (db, _dir) = setup_test_db();
         let id = db.create_milestone("v1.0", None).unwrap();
-        let result = close(&db, id);
-        assert!(result.is_ok());
+        close(&db, id).unwrap();
+        let m = db.get_milestone(id).unwrap().unwrap();
+        assert_eq!(m.status, "closed");
+        assert!(m.closed_at.is_some());
     }
 
     #[test]
     fn test_delete_milestone() {
         let (db, _dir) = setup_test_db();
         let id = db.create_milestone("v1.0", None).unwrap();
-        let result = delete(&db, id);
-        assert!(result.is_ok());
+        delete(&db, id).unwrap();
+        let m = db.get_milestone(id).unwrap();
+        assert!(m.is_none(), "Milestone should be deleted");
     }
 
     #[test]
@@ -237,26 +251,32 @@ mod tests {
         db.add_issue_to_milestone(milestone_id, issue1).unwrap();
         db.add_issue_to_milestone(milestone_id, issue2).unwrap();
         db.close_issue(issue1).unwrap();
-        let result = show(&db, milestone_id);
-        assert!(result.is_ok());
+        show(&db, milestone_id).unwrap();
+        let issues = db.get_milestone_issues(milestone_id).unwrap();
+        assert_eq!(issues.len(), 2);
+        let closed_count = issues.iter().filter(|i| i.status == "closed").count();
+        assert_eq!(closed_count, 1, "1 of 2 issues should be closed");
     }
 
     proptest! {
         #[test]
-        fn prop_create_milestone_never_panics(name in "[a-zA-Z0-9 ]{1,30}") {
+        fn prop_create_milestone_persists(name in "[a-zA-Z0-9 ]{1,30}") {
             let (db, _dir) = setup_test_db();
-            let result = create(&db, &name, None);
-            prop_assert!(result.is_ok());
+            create(&db, &name, None).unwrap();
+            let milestones = db.list_milestones(None).unwrap();
+            prop_assert_eq!(milestones.len(), 1);
+            prop_assert_eq!(&milestones[0].name, &name);
         }
 
         #[test]
-        fn prop_list_never_panics(count in 0usize..5) {
+        fn prop_list_returns_correct_count(count in 0usize..5) {
             let (db, _dir) = setup_test_db();
             for i in 0..count {
                 db.create_milestone(&format!("v{}.0", i), None).unwrap();
             }
-            let result = list(&db, None);
-            prop_assert!(result.is_ok());
+            list(&db, None).unwrap();
+            let milestones = db.list_milestones(None).unwrap();
+            prop_assert_eq!(milestones.len(), count);
         }
     }
 }

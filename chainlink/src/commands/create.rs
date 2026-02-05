@@ -188,14 +188,6 @@ mod tests {
     }
 
     #[test]
-    fn test_get_template_all_templates() {
-        for name in ["bug", "feature", "refactor", "research"] {
-            let template = get_template(name);
-            assert!(template.is_some(), "Template '{}' should exist", name);
-        }
-    }
-
-    #[test]
     fn test_get_template_not_found() {
         assert!(get_template("nonexistent").is_none());
         assert!(get_template("").is_none());
@@ -244,21 +236,6 @@ mod tests {
 
     proptest! {
         #[test]
-        fn prop_validate_priority_never_panics(s in ".*") {
-            let _ = validate_priority(&s);
-        }
-
-        #[test]
-        fn prop_get_template_never_panics(s in ".*") {
-            let _ = get_template(&s);
-        }
-
-        #[test]
-        fn prop_valid_priorities_always_validate(priority in "low|medium|high|critical") {
-            prop_assert!(validate_priority(&priority));
-        }
-
-        #[test]
         fn prop_invalid_priorities_never_validate(
             priority in "[a-zA-Z]{1,20}"
                 .prop_filter("Exclude valid priorities", |s| {
@@ -269,10 +246,12 @@ mod tests {
         }
 
         #[test]
-        fn prop_template_names_consistent(name in "bug|feature|refactor|research") {
-            let template = get_template(&name);
-            prop_assert!(template.is_some());
-            prop_assert_eq!(template.unwrap().name, name.as_str());
+        fn prop_unknown_template_returns_none(name in "[a-zA-Z]{5,20}"
+            .prop_filter("Exclude known templates", |s| {
+                !["bug", "feature", "refactor", "research"].contains(&s.as_str())
+            })
+        ) {
+            prop_assert!(get_template(&name).is_none());
         }
     }
 }

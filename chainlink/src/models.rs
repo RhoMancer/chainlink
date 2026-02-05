@@ -111,25 +111,7 @@ mod tests {
         let json = serde_json::to_string(&issue).unwrap();
         let deserialized: Issue = serde_json::from_str(&json).unwrap();
 
-        assert!(deserialized.closed_at.is_some());
-    }
-
-    #[test]
-    fn test_issue_clone() {
-        let issue = Issue {
-            id: 1,
-            title: "Original".to_string(),
-            description: Some("Desc".to_string()),
-            status: "open".to_string(),
-            priority: "high".to_string(),
-            parent_id: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-            closed_at: None,
-        };
-
-        let cloned = issue.clone();
-        assert_eq!(issue, cloned);
+        assert_eq!(deserialized.closed_at, Some(now));
     }
 
     #[test]
@@ -224,24 +206,8 @@ mod tests {
         let json = serde_json::to_string(&session).unwrap();
         let deserialized: Session = serde_json::from_str(&json).unwrap();
 
-        assert!(deserialized.ended_at.is_some());
-    }
-
-    #[test]
-    fn test_session_no_active_issue() {
-        let session = Session {
-            id: 1,
-            started_at: Utc::now(),
-            ended_at: None,
-            active_issue_id: None,
-            handoff_notes: None,
-        };
-
-        let json = serde_json::to_string(&session).unwrap();
-        let deserialized: Session = serde_json::from_str(&json).unwrap();
-
-        assert_eq!(deserialized.active_issue_id, None);
-        assert_eq!(deserialized.handoff_notes, None);
+        assert_eq!(deserialized.ended_at, Some(now));
+        assert_eq!(deserialized.handoff_notes, Some("Final notes".to_string()));
     }
 
     // ==================== Milestone Tests ====================
@@ -281,7 +247,7 @@ mod tests {
         let json = serde_json::to_string(&milestone).unwrap();
         let deserialized: Milestone = serde_json::from_str(&json).unwrap();
 
-        assert!(deserialized.closed_at.is_some());
+        assert_eq!(deserialized.closed_at, Some(now));
         assert_eq!(deserialized.status, "closed");
     }
 

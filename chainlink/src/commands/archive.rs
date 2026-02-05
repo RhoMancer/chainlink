@@ -94,8 +94,12 @@ mod tests {
         let id = db.create_issue("Test issue", None, "medium").unwrap();
         db.close_issue(id).unwrap();
 
-        let result = archive(&db, id);
-        assert!(result.is_ok());
+        archive(&db, id).unwrap();
+        let archived = db.list_archived_issues().unwrap();
+        assert!(
+            archived.iter().any(|i| i.id == id),
+            "Issue should appear in archived list"
+        );
     }
 
     #[test]
@@ -127,8 +131,17 @@ mod tests {
         db.close_issue(id).unwrap();
         archive(&db, id).unwrap();
 
-        let result = unarchive(&db, id);
-        assert!(result.is_ok());
+        unarchive(&db, id).unwrap();
+        let archived = db.list_archived_issues().unwrap();
+        assert!(
+            !archived.iter().any(|i| i.id == id),
+            "Issue should no longer be archived"
+        );
+        let closed = db.list_issues(Some("closed"), None, None).unwrap();
+        assert!(
+            closed.iter().any(|i| i.id == id),
+            "Issue should be back in closed list"
+        );
     }
 
     #[test]
@@ -138,14 +151,19 @@ mod tests {
 
         let result = unarchive(&db, id);
         assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("not found or not archived"));
     }
 
     #[test]
     fn test_list_empty() {
         let (db, _dir) = setup_test_db();
 
-        let result = list(&db);
-        assert!(result.is_ok());
+        list(&db).unwrap();
+        let archived = db.list_archived_issues().unwrap();
+        assert!(archived.is_empty());
     }
 
     #[test]
@@ -155,16 +173,22 @@ mod tests {
         db.close_issue(id).unwrap();
         archive(&db, id).unwrap();
 
-        let result = list(&db);
-        assert!(result.is_ok());
+        list(&db).unwrap();
+        let archived = db.list_archived_issues().unwrap();
+        assert_eq!(archived.len(), 1);
+        assert_eq!(archived[0].id, id);
     }
 
     #[test]
     fn test_archive_older_none() {
         let (db, _dir) = setup_test_db();
 
-        let result = archive_older(&db, 30);
-        assert!(result.is_ok());
+        archive_older(&db, 30).unwrap();
+        let archived = db.list_archived_issues().unwrap();
+        assert!(
+            archived.is_empty(),
+            "No issues should be archived with empty DB"
+        );
     }
 
     #[test]
@@ -211,8 +235,9 @@ mod tests {
             let id = db.create_issue(&title, None, "medium").unwrap();
             db.close_issue(id).unwrap();
 
-            let result = archive(&db, id);
-            prop_assert!(result.is_ok());
+            archive(&db, id).unwrap();
+            let archived = db.list_archived_issues().unwrap();
+            prop_assert!(archived.iter().any(|i| i.id == id));
         }
     }
 }

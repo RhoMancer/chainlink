@@ -17,6 +17,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `chainlink export` now outputs to stdout by default, use `-o` for file output
 
 ### Changed
+- Fix wrong assertion directions and tautological property tests (#96)
+- Fix overly loose CLI integration test assertions (#95)
+- Fix display function tests to verify actual output or DB state (#94)
 - Add unit tests for session.rs command (#64)
 - Add security-focused tests (#82)
 - Add unit tests for show.rs command (#58)
@@ -39,6 +42,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Project infographic for README
 
 ### Fixed
+- Audit and fix tautological tests and logical flaws in test suite (#92)
 - Fix UTF-8 panic in list truncation (#49)
 - Fix macOS cross-compilation linker configuration (#34)
 - Import/export roundtrip issues with parent relationships

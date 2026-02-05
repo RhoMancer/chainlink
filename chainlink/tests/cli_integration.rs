@@ -55,7 +55,11 @@ fn test_create_issue() {
     let (success, stdout, _) = run_chainlink(dir.path(), &["create", "Test issue"]);
 
     assert!(success);
-    assert!(stdout.contains("#1") || stdout.contains("1"));
+    assert!(
+        stdout.contains("Created issue #1"),
+        "Expected 'Created issue #1' in output, got: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -104,7 +108,11 @@ fn test_create_subissue() {
     let (success, stdout, _) = run_chainlink(dir.path(), &["subissue", "1", "Child issue"]);
 
     assert!(success);
-    assert!(stdout.contains("#2") || stdout.contains("2"));
+    assert!(
+        stdout.contains("Created subissue #2"),
+        "Expected 'Created subissue #2' in output, got: {}",
+        stdout
+    );
 
     // Verify parent-child relationship in show
     let (_, show_out, _) = run_chainlink(dir.path(), &["show", "1"]);
@@ -121,7 +129,11 @@ fn test_list_empty() {
     let (success, stdout, _) = run_chainlink(dir.path(), &["list"]);
 
     assert!(success);
-    assert!(stdout.contains("No issues") || stdout.is_empty() || stdout.trim().is_empty());
+    assert!(
+        stdout.contains("No issues found."),
+        "Expected 'No issues found.' in output, got: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -451,18 +463,23 @@ fn test_command_without_init() {
 
     let (success, stdout, stderr) = run_chainlink(dir.path(), &["list"]);
 
-    // The CLI may either:
-    // 1. Fail with an error about missing .chainlink
-    // 2. Succeed but show empty results or a warning
-    // 3. Auto-create the database
-    // All are acceptable behaviors
-    assert!(
-        !success
-            || stderr.contains("chainlink")
-            || stderr.contains("init")
-            || stdout.contains("No issues")
-            || stdout.is_empty()
-    );
+    // The CLI walks up parent directories to find .chainlink, so from a temp dir
+    // inside the project tree, it may find the project's own .chainlink.
+    // In that case it succeeds with the project DB. If truly isolated, it fails.
+    if !success {
+        assert!(
+            stderr.contains("Not a chainlink repository") || stderr.contains("chainlink init"),
+            "Error should mention missing repo, got stderr: {}",
+            stderr
+        );
+    } else {
+        // Found a parent .chainlink - list should work normally
+        assert!(
+            stdout.contains("No issues") || stdout.contains("#"),
+            "Should show valid list output, got: {}",
+            stdout
+        );
+    }
 }
 
 #[test]
@@ -472,7 +489,12 @@ fn test_invalid_priority() {
 
     let (success, _, stderr) = run_chainlink(dir.path(), &["create", "Issue", "-p", "invalid"]);
 
-    assert!(!success || stderr.contains("invalid") || stderr.contains("priority"));
+    assert!(!success, "Creating issue with invalid priority should fail");
+    assert!(
+        stderr.contains("Invalid") || stderr.contains("priority"),
+        "Error should mention invalid priority, got stderr: {}",
+        stderr
+    );
 }
 
 // ==================== Security Tests ====================
@@ -738,10 +760,9 @@ fn test_timer_status_no_timer() {
 
     assert!(success);
     assert!(
-        stdout.contains("No timer")
-            || stdout.contains("not running")
-            || stdout.contains("No active")
-            || stdout.is_empty()
+        stdout.contains("No timer running"),
+        "Expected 'No timer running' message, got: {}",
+        stdout
     );
 }
 
@@ -860,10 +881,9 @@ fn test_next_no_issues() {
 
     assert!(success);
     assert!(
-        stdout.contains("No issues")
-            || stdout.contains("nothing")
-            || stdout.is_empty()
-            || stdout.contains("All done")
+        stdout.contains("No issues ready to work on"),
+        "Expected 'No issues ready to work on' message, got: {}",
+        stdout
     );
 }
 
@@ -915,7 +935,11 @@ fn test_export_markdown() {
     assert!(export_path.exists());
 
     let content = std::fs::read_to_string(&export_path).unwrap();
-    assert!(content.contains("Issue 1") || content.contains("# "));
+    assert!(
+        content.contains("Issue 1"),
+        "Exported markdown should contain issue title, got: {}",
+        &content[..content.len().min(200)]
+    );
 }
 
 #[test]
@@ -955,12 +979,9 @@ fn test_tested_command() {
 
     assert!(success);
     assert!(
-        stdout.contains("Marked tests")
-            || stdout.contains("Tests marked")
-            || stdout.contains("recorded")
-            || stdout.contains("tested")
-            || stdout.contains("tests as run")
-            || stdout.is_empty()
+        stdout.contains("Marked tests as run"),
+        "Expected 'Marked tests as run' in output, got: {}",
+        stdout
     );
 }
 
@@ -1082,14 +1103,10 @@ fn test_session_end_without_start() {
 
     let (success, stdout, stderr) = run_chainlink(dir.path(), &["session", "end"]);
 
-    // Should handle gracefully (error message goes to stderr)
+    // Should fail or report no active session
     assert!(
-        success
-            || stdout.contains("No active")
-            || stdout.contains("no session")
-            || stdout.contains("ended")
-            || stderr.contains("No active")
-            || stderr.contains("no session")
+        !success || stdout.contains("No active") || stderr.contains("No active"),
+        "Ending without starting should fail or report no active session, got stdout: {}, stderr: {}", stdout, stderr
     );
 }
 
@@ -1102,10 +1119,9 @@ fn test_session_status_without_session() {
 
     assert!(success);
     assert!(
-        stdout.contains("No active")
-            || stdout.contains("no session")
-            || stdout.contains("Session")
-            || stdout.is_empty()
+        stdout.contains("No active session"),
+        "Expected 'No active session' message, got: {}",
+        stdout
     );
 }
 
@@ -1138,7 +1154,13 @@ fn test_next_with_blocked_issues() {
     assert!(success);
     // Should suggest the blocker, not the blocked issue
     assert!(
-        stdout.contains("Blocker") || stdout.contains("#2") || !stdout.contains("Blocked issue")
+        stdout.contains("Blocker issue"),
+        "Next should recommend the unblocked blocker, got: {}",
+        stdout
+    );
+    assert!(
+        !stdout.contains("Next: #1"),
+        "Next should not recommend the blocked issue as top pick"
     );
 }
 
@@ -1154,10 +1176,9 @@ fn test_next_all_closed() {
 
     assert!(success);
     assert!(
-        stdout.contains("No issues")
-            || stdout.contains("All done")
-            || stdout.contains("nothing")
-            || stdout.is_empty()
+        stdout.contains("No issues ready to work on"),
+        "Expected 'No issues ready to work on' message, got: {}",
+        stdout
     );
 }
 
@@ -1189,8 +1210,13 @@ fn test_archive_already_archived() {
     // Try to archive again
     let (success, stdout, stderr) = run_chainlink(dir.path(), &["archive", "add", "1"]);
 
-    // Should handle gracefully (error message goes to stderr)
-    assert!(success || stdout.contains("already") || stderr.contains("archived"));
+    // Should report already archived or fail
+    assert!(
+        stdout.contains("already") || stderr.contains("already") || !success,
+        "Archiving twice should indicate already archived, got stdout: {}, stderr: {}",
+        stdout,
+        stderr
+    );
 }
 
 // ==================== Additional Milestone Edge Cases ====================
@@ -1359,10 +1385,9 @@ fn test_search_no_results() {
 
     assert!(success);
     assert!(
-        stdout.is_empty()
-            || stdout.contains("No ")
-            || stdout.contains("0 ")
-            || !stdout.contains("Test issue")
+        stdout.contains("No issues found matching"),
+        "Expected 'No issues found matching' message, got: {}",
+        stdout
     );
 }
 
@@ -1793,11 +1818,19 @@ fn test_export_markdown_format() {
     );
 
     assert!(success);
-    assert!(stderr.contains("Exported") || stderr.contains("export"));
+    assert!(
+        stderr.contains("Exported"),
+        "Expected 'Exported' in stderr, got: {}",
+        stderr
+    );
 
-    // Verify file exists and has markdown content
+    // Verify file exists and has the issue content
     let content = std::fs::read_to_string(&export_path).unwrap();
-    assert!(content.contains("#") || content.contains("Issue for markdown"));
+    assert!(
+        content.contains("Issue for markdown"),
+        "Exported markdown should contain issue title, got: {}",
+        &content[..content.len().min(200)]
+    );
 }
 
 // --- Archive older days test ---
@@ -1815,11 +1848,9 @@ fn test_archive_older_no_matches() {
 
     assert!(success);
     assert!(
-        stdout.contains("0")
-            || stdout.contains("No")
-            || stdout.contains("none")
-            || stdout.is_empty()
-            || stdout.contains("Archived")
+        stdout.contains("No issues to archive") || stdout.contains("Archived 0"),
+        "Should report no issues to archive, got: {}",
+        stdout
     );
 }
 
@@ -1880,7 +1911,11 @@ fn test_unrelate_no_relation() {
     let (success, stdout, _) = run_chainlink(dir.path(), &["unrelate", "1", "2"]);
 
     assert!(success);
-    assert!(stdout.contains("No relation") || stdout.contains("not found") || stdout.is_empty());
+    assert!(
+        stdout.contains("No relation found"),
+        "Expected 'No relation found' message, got: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -1893,7 +1928,11 @@ fn test_related_no_relations() {
     let (success, stdout, _) = run_chainlink(dir.path(), &["related", "1"]);
 
     assert!(success);
-    assert!(stdout.contains("No related") || stdout.is_empty());
+    assert!(
+        stdout.contains("No related issues"),
+        "Expected 'No related issues' message, got: {}",
+        stdout
+    );
 }
 
 #[test]
@@ -1955,7 +1994,11 @@ fn test_unlabel_nonexistent_label() {
     let (success, stdout, _) = run_chainlink(dir.path(), &["unlabel", "1", "nonexistent"]);
 
     assert!(success);
-    assert!(stdout.contains("not found") || stdout.contains("nonexistent") || stdout.is_empty());
+    assert!(
+        stdout.contains("not found"),
+        "Expected 'not found' message for non-existent label, got: {}",
+        stdout
+    );
 }
 
 // --- create.rs: Invalid priority ---
@@ -1996,8 +2039,12 @@ fn test_block_self() {
 
     let (success, _, stderr) = run_chainlink(dir.path(), &["block", "1", "1"]);
 
-    // Should either fail or succeed gracefully
-    assert!(!success || stderr.is_empty());
+    assert!(!success, "Blocking an issue by itself should fail");
+    assert!(
+        stderr.contains("cannot block itself"),
+        "Error should mention self-blocking, got stderr: {}",
+        stderr
+    );
 }
 
 #[test]
@@ -2290,10 +2337,16 @@ fn test_edge_empty_strings() {
     let dir = tempdir().unwrap();
     init_chainlink(dir.path());
 
-    // Empty title should fail gracefully
-    let (success, _, stderr) = run_chainlink(dir.path(), &["create", ""]);
-    // Either fails with error or creates issue - shouldn't crash
-    assert!(!success || stderr.is_empty());
+    // Empty title - should either fail or succeed (both acceptable, just don't crash)
+    let (success, stdout, _) = run_chainlink(dir.path(), &["create", ""]);
+    if success {
+        // If it accepted empty title, verify the issue was created
+        assert!(
+            stdout.contains("Created issue"),
+            "If success, should show created message, got: {}",
+            stdout
+        );
+    }
 
     // Empty comment
     run_chainlink(dir.path(), &["create", "Issue"]);
@@ -2311,16 +2364,22 @@ fn test_edge_large_ids() {
 
     run_chainlink(dir.path(), &["create", "Test"]);
 
-    // Very large IDs
-    let (success, _, _) = run_chainlink(dir.path(), &["show", "9223372036854775807"]); // i64::MAX
-    assert!(!success || true); // Should handle gracefully
+    // Very large IDs - should fail with "not found" since issue doesn't exist
+    let (success, _, stderr) = run_chainlink(dir.path(), &["show", "9223372036854775807"]); // i64::MAX
+    assert!(!success, "Show with non-existent large ID should fail");
+    assert!(
+        stderr.contains("not found"),
+        "Error should say not found, got: {}",
+        stderr
+    );
 
+    // Overflow ID - should fail with parse error or not found
     let (success, _, _) = run_chainlink(dir.path(), &["show", "99999999999999999999999"]);
-    assert!(!success || true); // Should handle gracefully (parse error or not found)
+    assert!(!success, "Show with overflow ID should fail");
 
-    // Negative IDs
-    let (_, _, _) = run_chainlink(dir.path(), &["show", "-1"]);
-    // Should not crash
+    // Negative IDs - clap may reject or db returns not found
+    let (success, _, _) = run_chainlink(dir.path(), &["show", "-1"]);
+    assert!(!success, "Show with negative ID should fail");
 }
 
 /// Test concurrent-like rapid operations
@@ -2481,7 +2540,11 @@ fn test_unicode_in_descriptions_and_comments() {
     // Show should display without panic
     let (success, stdout, _) = run_chainlink(dir.path(), &["show", "1"]);
     assert!(success);
-    assert!(stdout.contains("Description") || stdout.contains("日本語") || true);
+    assert!(
+        stdout.contains("日本語"),
+        "Show output should contain the Unicode description text, got: {}",
+        stdout
+    );
 }
 
 /// Test search with Unicode queries

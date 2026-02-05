@@ -1863,10 +1863,19 @@ mod tests {
         // Create an empty file (corrupted)
         std::fs::write(&db_path, b"").unwrap();
 
-        // Should fail gracefully, not panic
+        // SQLite treats empty files as new databases, so this should succeed
+        // and the database should be usable afterward
         let result = Database::open(&db_path);
-        // SQLite will either recover or return an error
-        assert!(result.is_ok() || result.is_err());
+        assert!(
+            result.is_ok(),
+            "Empty file should be treated as new DB: {:?}",
+            result.err()
+        );
+        let db = result.unwrap();
+        let id = db
+            .create_issue("Test after recovery", None, "medium")
+            .unwrap();
+        assert!(id > 0);
     }
 
     #[test]
@@ -1897,10 +1906,29 @@ mod tests {
         let content = std::fs::read(&db_path).unwrap();
         std::fs::write(&db_path, &content[..content.len() / 2]).unwrap();
 
-        // Should handle gracefully
+        // Truncated DB should fail to open -- SQLite detects corruption
         let result = Database::open(&db_path);
-        // May recover or fail, but should not panic
-        assert!(result.is_ok() || result.is_err());
+        match result {
+            Err(e) => {
+                let err_msg = format!("{}", e);
+                assert!(
+                    err_msg.contains("not a database")
+                        || err_msg.contains("malformed")
+                        || err_msg.contains("corrupt")
+                        || err_msg.contains("disk image"),
+                    "Error should indicate corruption, got: {}",
+                    err_msg
+                );
+            }
+            Ok(db) => {
+                // If SQLite somehow recovers, verify the original data is gone
+                let issues = db.list_issues(Some("all"), None, None).unwrap();
+                assert!(
+                    issues.is_empty(),
+                    "Truncated DB should not retain original data"
+                );
+            }
+        }
     }
 
     #[test]

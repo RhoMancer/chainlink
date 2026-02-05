@@ -91,8 +91,12 @@ mod tests {
         let issue1 = db.create_issue("Issue 1", None, "medium").unwrap();
         let issue2 = db.create_issue("Issue 2", None, "medium").unwrap();
 
-        let result = block(&db, issue1, issue2);
-        assert!(result.is_ok());
+        block(&db, issue1, issue2).unwrap();
+        let blockers = db.get_blockers(issue1).unwrap();
+        assert!(
+            blockers.contains(&issue2),
+            "Issue 2 should be a blocker of Issue 1"
+        );
     }
 
     #[test]
@@ -135,8 +139,14 @@ mod tests {
         let issue2 = db.create_issue("Issue 2", None, "medium").unwrap();
 
         block(&db, issue1, issue2).unwrap();
-        let result = block(&db, issue1, issue2);
-        assert!(result.is_ok()); // Should succeed but print "already exists"
+        block(&db, issue1, issue2).unwrap(); // Should succeed, print "already exists"
+        let blockers = db.get_blockers(issue1).unwrap();
+        assert_eq!(
+            blockers.len(),
+            1,
+            "Duplicate block should not create second dependency"
+        );
+        assert!(blockers.contains(&issue2));
     }
 
     // Unblock function tests
@@ -147,8 +157,12 @@ mod tests {
         let issue2 = db.create_issue("Issue 2", None, "medium").unwrap();
         db.add_dependency(issue1, issue2).unwrap();
 
-        let result = unblock(&db, issue1, issue2);
-        assert!(result.is_ok());
+        unblock(&db, issue1, issue2).unwrap();
+        let blockers = db.get_blockers(issue1).unwrap();
+        assert!(
+            blockers.is_empty(),
+            "Blocker should be removed after unblock"
+        );
     }
 
     #[test]
@@ -157,8 +171,10 @@ mod tests {
         let issue1 = db.create_issue("Issue 1", None, "medium").unwrap();
         let issue2 = db.create_issue("Issue 2", None, "medium").unwrap();
 
-        let result = unblock(&db, issue1, issue2);
-        assert!(result.is_ok()); // Should succeed but print "no such dependency"
+        // Should succeed gracefully even when no dependency exists
+        unblock(&db, issue1, issue2).unwrap();
+        let blockers = db.get_blockers(issue1).unwrap();
+        assert!(blockers.is_empty(), "No blockers should exist");
     }
 
     // List blocked tests
@@ -166,8 +182,9 @@ mod tests {
     fn test_list_blocked_empty() {
         let (db, _dir) = setup_test_db();
 
-        let result = list_blocked(&db);
-        assert!(result.is_ok());
+        list_blocked(&db).unwrap();
+        let blocked = db.list_blocked_issues().unwrap();
+        assert!(blocked.is_empty());
     }
 
     #[test]
@@ -177,8 +194,10 @@ mod tests {
         let issue2 = db.create_issue("Blocker", None, "medium").unwrap();
         db.add_dependency(issue1, issue2).unwrap();
 
-        let result = list_blocked(&db);
-        assert!(result.is_ok());
+        list_blocked(&db).unwrap();
+        let blocked = db.list_blocked_issues().unwrap();
+        assert_eq!(blocked.len(), 1);
+        assert_eq!(blocked[0].id, issue1);
     }
 
     #[test]
@@ -190,8 +209,11 @@ mod tests {
         db.add_dependency(blocked, blocker1).unwrap();
         db.add_dependency(blocked, blocker2).unwrap();
 
-        let result = list_blocked(&db);
-        assert!(result.is_ok());
+        list_blocked(&db).unwrap();
+        let blockers = db.get_blockers(blocked).unwrap();
+        assert_eq!(blockers.len(), 2);
+        assert!(blockers.contains(&blocker1));
+        assert!(blockers.contains(&blocker2));
     }
 
     // List ready tests
@@ -199,17 +221,20 @@ mod tests {
     fn test_list_ready_empty() {
         let (db, _dir) = setup_test_db();
 
-        let result = list_ready(&db);
-        assert!(result.is_ok());
+        list_ready(&db).unwrap();
+        let ready = db.list_ready_issues().unwrap();
+        assert!(ready.is_empty());
     }
 
     #[test]
     fn test_list_ready_with_issues() {
         let (db, _dir) = setup_test_db();
-        db.create_issue("Ready issue", None, "medium").unwrap();
+        let id = db.create_issue("Ready issue", None, "medium").unwrap();
 
-        let result = list_ready(&db);
-        assert!(result.is_ok());
+        list_ready(&db).unwrap();
+        let ready = db.list_ready_issues().unwrap();
+        assert_eq!(ready.len(), 1);
+        assert_eq!(ready[0].id, id);
     }
 
     #[test]
@@ -271,30 +296,22 @@ mod tests {
 
     proptest! {
         #[test]
-        fn truncate_never_panics(s in ".*", max_chars in 1usize..200) {
-            let _ = truncate(&s, max_chars);
-        }
-
-        #[test]
-        fn truncate_result_valid_utf8(s in ".*", max_chars in 4usize..100) {
-            let result = truncate(&s, max_chars);
-            let _ = result.chars().count();
-        }
-
-        #[test]
         fn truncate_respects_limit(s in ".{10,100}", max_chars in 5usize..50) {
             let result = truncate(&s, max_chars);
             assert!(result.chars().count() <= max_chars);
         }
 
         #[test]
-        fn prop_block_with_valid_issues(title1 in "[a-zA-Z ]{1,20}", title2 in "[a-zA-Z ]{1,20}") {
+        fn prop_block_creates_dependency(title1 in "[a-zA-Z ]{1,20}", title2 in "[a-zA-Z ]{1,20}") {
             let (db, _dir) = setup_test_db();
             let issue1 = db.create_issue(&title1, None, "medium").unwrap();
             let issue2 = db.create_issue(&title2, None, "medium").unwrap();
 
-            let result = block(&db, issue1, issue2);
-            prop_assert!(result.is_ok());
+            block(&db, issue1, issue2).unwrap();
+            let blockers = db.get_blockers(issue1).unwrap();
+            prop_assert!(blockers.contains(&issue2));
+            let blocked = db.list_blocked_issues().unwrap();
+            prop_assert!(blocked.iter().any(|i| i.id == issue1));
         }
     }
 }

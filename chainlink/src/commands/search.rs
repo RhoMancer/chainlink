@@ -64,33 +64,45 @@ mod tests {
     #[test]
     fn test_search_finds_by_title() {
         let (db, _dir) = setup_test_db();
-        db.create_issue("Fix authentication bug", None, "high")
+        let id = db
+            .create_issue("Fix authentication bug", None, "high")
             .unwrap();
         db.create_issue("Add dark mode", None, "medium").unwrap();
 
-        let result = run(&db, "authentication");
-        assert!(result.is_ok());
+        run(&db, "authentication").unwrap();
+        let results = db.search_issues("authentication").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, id);
     }
 
     #[test]
     fn test_search_finds_by_description() {
         let (db, _dir) = setup_test_db();
-        db.create_issue("Feature A", Some("This relates to user login"), "medium")
+        let id = db
+            .create_issue("Feature A", Some("This relates to user login"), "medium")
             .unwrap();
 
-        let result = run(&db, "login");
-        assert!(result.is_ok());
+        run(&db, "login").unwrap();
+        let results = db.search_issues("login").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, id);
     }
 
     #[test]
     fn test_search_case_insensitive() {
         let (db, _dir) = setup_test_db();
-        db.create_issue("Fix AUTHENTICATION Bug", None, "high")
+        let id = db
+            .create_issue("Fix AUTHENTICATION Bug", None, "high")
             .unwrap();
 
-        // Search with different cases should still work (via db layer)
-        let result = run(&db, "authentication");
-        assert!(result.is_ok());
+        run(&db, "authentication").unwrap();
+        let results = db.search_issues("authentication").unwrap();
+        assert_eq!(
+            results.len(),
+            1,
+            "Case-insensitive search should find the issue"
+        );
+        assert_eq!(results[0].id, id);
     }
 
     #[test]
@@ -98,16 +110,21 @@ mod tests {
         let (db, _dir) = setup_test_db();
         db.create_issue("Some issue", None, "medium").unwrap();
 
-        let result = run(&db, "nonexistent");
-        assert!(result.is_ok());
+        run(&db, "nonexistent").unwrap();
+        let results = db.search_issues("nonexistent").unwrap();
+        assert!(
+            results.is_empty(),
+            "Search for nonexistent term should return empty"
+        );
     }
 
     #[test]
     fn test_search_empty_database() {
         let (db, _dir) = setup_test_db();
 
-        let result = run(&db, "anything");
-        assert!(result.is_ok());
+        run(&db, "anything").unwrap();
+        let results = db.search_issues("anything").unwrap();
+        assert!(results.is_empty());
     }
 
     #[test]
@@ -115,28 +132,36 @@ mod tests {
         let (db, _dir) = setup_test_db();
         db.create_issue("Test issue", None, "medium").unwrap();
 
-        let result = run(&db, "");
-        assert!(result.is_ok());
+        run(&db, "").unwrap();
+        let results = db.search_issues("").unwrap();
+        // Empty query behavior: may match all or none depending on implementation
+        // Just verify it doesn't error
     }
 
     #[test]
     fn test_search_special_characters() {
         let (db, _dir) = setup_test_db();
-        db.create_issue("Fix bug with @mentions", None, "medium")
+        let id = db
+            .create_issue("Fix bug with @mentions", None, "medium")
             .unwrap();
 
-        let result = run(&db, "@mentions");
-        assert!(result.is_ok());
+        run(&db, "@mentions").unwrap();
+        let results = db.search_issues("@mentions").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, id);
     }
 
     #[test]
     fn test_search_unicode() {
         let (db, _dir) = setup_test_db();
-        db.create_issue("Fix 日本語 support", None, "medium")
+        let id = db
+            .create_issue("Fix 日本語 support", None, "medium")
             .unwrap();
 
-        let result = run(&db, "日本語");
-        assert!(result.is_ok());
+        run(&db, "日本語").unwrap();
+        let results = db.search_issues("日本語").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, id);
     }
 
     #[test]
@@ -144,13 +169,13 @@ mod tests {
         let (db, _dir) = setup_test_db();
         db.create_issue("Normal issue", None, "medium").unwrap();
 
-        // Should not crash or inject SQL
-        let result = run(&db, "'; DROP TABLE issues; --");
-        assert!(result.is_ok());
-
-        // Database should still be intact
+        run(&db, "'; DROP TABLE issues; --").unwrap();
         let issues = db.list_issues(None, None, None).unwrap();
-        assert_eq!(issues.len(), 1);
+        assert_eq!(
+            issues.len(),
+            1,
+            "Database should be intact after SQL injection attempt"
+        );
     }
 
     #[test]
@@ -159,9 +184,13 @@ mod tests {
         db.create_issue("Test issue with pattern", None, "medium")
             .unwrap();
 
-        // SQL wildcards should be escaped
-        let result = run(&db, "%pattern%");
-        assert!(result.is_ok());
+        run(&db, "%pattern%").unwrap();
+        let results = db.search_issues("%pattern%").unwrap();
+        // SQL wildcards should be escaped -- literal "%pattern%" should NOT match "pattern"
+        assert!(
+            results.is_empty(),
+            "Literal SQL wildcards should be escaped and not match"
+        );
     }
 
     #[test]
@@ -171,19 +200,29 @@ mod tests {
         db.add_comment(id, "Found the root cause in authentication module")
             .unwrap();
 
-        let result = run(&db, "authentication");
-        assert!(result.is_ok());
+        run(&db, "authentication").unwrap();
+        let results = db.search_issues("authentication").unwrap();
+        assert_eq!(
+            results.len(),
+            1,
+            "Search should find issues via comment content"
+        );
+        assert_eq!(results[0].id, id);
     }
 
     #[test]
     fn test_search_subissue_shows_parent() {
         let (db, _dir) = setup_test_db();
         let parent_id = db.create_issue("Parent feature", None, "high").unwrap();
-        db.create_subissue(parent_id, "Sub task authentication", None, "medium")
+        let sub_id = db
+            .create_subissue(parent_id, "Sub task authentication", None, "medium")
             .unwrap();
 
-        let result = run(&db, "authentication");
-        assert!(result.is_ok());
+        run(&db, "authentication").unwrap();
+        let results = db.search_issues("authentication").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, sub_id);
+        assert_eq!(results[0].parent_id, Some(parent_id));
     }
 
     #[test]
@@ -194,8 +233,10 @@ mod tests {
             .unwrap();
         db.close_issue(id).unwrap();
 
-        let result = run(&db, "authentication");
-        assert!(result.is_ok());
+        run(&db, "authentication").unwrap();
+        let results = db.search_issues("authentication").unwrap();
+        assert_eq!(results.len(), 1, "Search should find closed issues too");
+        assert_eq!(results[0].status, "closed");
     }
 
     // ==================== Property-Based Tests ====================

@@ -85,49 +85,61 @@ mod tests {
     #[test]
     fn test_run_empty() {
         let (db, _dir) = setup_test_db();
-        let result = run(&db, None);
-        assert!(result.is_ok());
+        run(&db, None).unwrap();
+        let issues = db.list_issues(None, None, None).unwrap();
+        assert!(issues.is_empty());
     }
 
     #[test]
     fn test_run_single_issue() {
         let (db, _dir) = setup_test_db();
-        db.create_issue("Test issue", None, "medium").unwrap();
-        let result = run(&db, None);
-        assert!(result.is_ok());
+        let id = db.create_issue("Test issue", None, "medium").unwrap();
+        run(&db, None).unwrap();
+        let issues = db.list_issues(None, None, None).unwrap();
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].id, id);
     }
 
     #[test]
     fn test_run_with_hierarchy() {
         let (db, _dir) = setup_test_db();
         let parent = db.create_issue("Parent", None, "high").unwrap();
-        db.create_subissue(parent, "Child 1", None, "medium")
+        let c1 = db
+            .create_subissue(parent, "Child 1", None, "medium")
             .unwrap();
-        db.create_subissue(parent, "Child 2", None, "low").unwrap();
-        let result = run(&db, None);
-        assert!(result.is_ok());
+        let c2 = db.create_subissue(parent, "Child 2", None, "low").unwrap();
+        run(&db, None).unwrap();
+        let subs = db.get_subissues(parent).unwrap();
+        assert_eq!(subs.len(), 2);
+        assert!(subs.iter().any(|s| s.id == c1));
+        assert!(subs.iter().any(|s| s.id == c2));
     }
 
     #[test]
     fn test_run_nested_hierarchy() {
         let (db, _dir) = setup_test_db();
-        let parent = db.create_issue("Grandparent", None, "high").unwrap();
-        let child = db
-            .create_subissue(parent, "Parent", None, "medium")
+        let grandparent = db.create_issue("Grandparent", None, "high").unwrap();
+        let parent = db
+            .create_subissue(grandparent, "Parent", None, "medium")
             .unwrap();
-        db.create_subissue(child, "Child", None, "low").unwrap();
-        let result = run(&db, None);
-        assert!(result.is_ok());
+        let child = db.create_subissue(parent, "Child", None, "low").unwrap();
+        run(&db, None).unwrap();
+        let child_issue = db.get_issue(child).unwrap().unwrap();
+        assert_eq!(child_issue.parent_id, Some(parent));
+        let parent_issue = db.get_issue(parent).unwrap().unwrap();
+        assert_eq!(parent_issue.parent_id, Some(grandparent));
     }
 
     #[test]
     fn test_run_with_status_filter() {
         let (db, _dir) = setup_test_db();
-        let id = db.create_issue("Open issue", None, "medium").unwrap();
-        db.create_issue("Closed issue", None, "medium").unwrap();
-        db.close_issue(id).unwrap();
-        let result = run(&db, Some("open"));
-        assert!(result.is_ok());
+        let closed_id = db.create_issue("Closed issue", None, "medium").unwrap();
+        let open_id = db.create_issue("Open issue", None, "medium").unwrap();
+        db.close_issue(closed_id).unwrap();
+        run(&db, Some("open")).unwrap();
+        let open_issues = db.list_issues(Some("open"), None, None).unwrap();
+        assert_eq!(open_issues.len(), 1);
+        assert_eq!(open_issues[0].id, open_id);
     }
 
     #[test]
@@ -135,8 +147,10 @@ mod tests {
         let (db, _dir) = setup_test_db();
         let id = db.create_issue("Issue", None, "medium").unwrap();
         db.close_issue(id).unwrap();
-        let result = run(&db, Some("closed"));
-        assert!(result.is_ok());
+        run(&db, Some("closed")).unwrap();
+        let closed = db.list_issues(Some("closed"), None, None).unwrap();
+        assert_eq!(closed.len(), 1);
+        assert_eq!(closed[0].id, id);
     }
 
     #[test]
@@ -145,8 +159,9 @@ mod tests {
         db.create_issue("Open issue", None, "medium").unwrap();
         let id = db.create_issue("Closed issue", None, "medium").unwrap();
         db.close_issue(id).unwrap();
-        let result = run(&db, Some("all"));
-        assert!(result.is_ok());
+        run(&db, Some("all")).unwrap();
+        let all = db.list_issues(Some("all"), None, None).unwrap();
+        assert_eq!(all.len(), 2);
     }
 
     proptest! {

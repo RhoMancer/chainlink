@@ -383,11 +383,15 @@ mod tests {
         }
 
         #[test]
-        fn prop_changelog_category_always_returns_string(
+        fn prop_changelog_category_returns_known_category(
             labels in proptest::collection::vec("[a-zA-Z]{1,20}", 0..5)
         ) {
+            let valid_categories = ["Fixed", "Added", "Changed", "Deprecated", "Removed", "Security"];
             let category = determine_changelog_category(&labels);
-            prop_assert!(!category.is_empty());
+            prop_assert!(
+                valid_categories.contains(&category.as_str()),
+                "Got unknown category: {}", category
+            );
         }
     }
 }

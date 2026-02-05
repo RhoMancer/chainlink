@@ -122,8 +122,11 @@ mod tests {
         let (db, _dir) = setup_test_db();
         let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
 
-        let result = run(&db, issue_id);
-        assert!(result.is_ok());
+        run(&db, issue_id).unwrap();
+        let issue = db.get_issue(issue_id).unwrap().unwrap();
+        assert_eq!(issue.title, "Test issue");
+        assert_eq!(issue.priority, "medium");
+        assert_eq!(issue.status, "open");
     }
 
     #[test]
@@ -142,8 +145,12 @@ mod tests {
             .create_issue("Test issue", Some("A detailed description"), "high")
             .unwrap();
 
-        let result = run(&db, issue_id);
-        assert!(result.is_ok());
+        run(&db, issue_id).unwrap();
+        let issue = db.get_issue(issue_id).unwrap().unwrap();
+        assert_eq!(
+            issue.description,
+            Some("A detailed description".to_string())
+        );
     }
 
     #[test]
@@ -153,8 +160,11 @@ mod tests {
         db.add_label(issue_id, "bug").unwrap();
         db.add_label(issue_id, "urgent").unwrap();
 
-        let result = run(&db, issue_id);
-        assert!(result.is_ok());
+        run(&db, issue_id).unwrap();
+        let labels = db.get_labels(issue_id).unwrap();
+        assert_eq!(labels.len(), 2);
+        assert!(labels.contains(&"bug".to_string()));
+        assert!(labels.contains(&"urgent".to_string()));
     }
 
     #[test]
@@ -164,8 +174,11 @@ mod tests {
         db.add_comment(issue_id, "First comment").unwrap();
         db.add_comment(issue_id, "Second comment").unwrap();
 
-        let result = run(&db, issue_id);
-        assert!(result.is_ok());
+        run(&db, issue_id).unwrap();
+        let comments = db.get_comments(issue_id).unwrap();
+        assert_eq!(comments.len(), 2);
+        assert_eq!(comments[0].content, "First comment");
+        assert_eq!(comments[1].content, "Second comment");
     }
 
     #[test]
@@ -175,21 +188,28 @@ mod tests {
         let issue_id = db.create_issue("Blocked issue", None, "medium").unwrap();
         db.add_dependency(issue_id, blocker_id).unwrap();
 
-        let result = run(&db, issue_id);
-        assert!(result.is_ok());
+        run(&db, issue_id).unwrap();
+        let blockers = db.get_blockers(issue_id).unwrap();
+        assert_eq!(blockers.len(), 1);
+        assert!(blockers.contains(&blocker_id));
     }
 
     #[test]
     fn test_show_issue_with_subissues() {
         let (db, _dir) = setup_test_db();
         let parent_id = db.create_issue("Parent", None, "high").unwrap();
-        db.create_subissue(parent_id, "Child 1", None, "medium")
+        let c1 = db
+            .create_subissue(parent_id, "Child 1", None, "medium")
             .unwrap();
-        db.create_subissue(parent_id, "Child 2", None, "low")
+        let c2 = db
+            .create_subissue(parent_id, "Child 2", None, "low")
             .unwrap();
 
-        let result = run(&db, parent_id);
-        assert!(result.is_ok());
+        run(&db, parent_id).unwrap();
+        let subs = db.get_subissues(parent_id).unwrap();
+        assert_eq!(subs.len(), 2);
+        assert!(subs.iter().any(|s| s.id == c1 && s.title == "Child 1"));
+        assert!(subs.iter().any(|s| s.id == c2 && s.title == "Child 2"));
     }
 
     #[test]
@@ -200,8 +220,9 @@ mod tests {
             .create_subissue(parent_id, "Child", None, "medium")
             .unwrap();
 
-        let result = run(&db, child_id);
-        assert!(result.is_ok());
+        run(&db, child_id).unwrap();
+        let child = db.get_issue(child_id).unwrap().unwrap();
+        assert_eq!(child.parent_id, Some(parent_id));
     }
 
     #[test]
@@ -211,8 +232,10 @@ mod tests {
         let issue2 = db.create_issue("Issue 2", None, "medium").unwrap();
         db.add_relation(issue1, issue2).unwrap();
 
-        let result = run(&db, issue1);
-        assert!(result.is_ok());
+        run(&db, issue1).unwrap();
+        let related = db.get_related_issues(issue1).unwrap();
+        assert_eq!(related.len(), 1);
+        assert_eq!(related[0].id, issue2);
     }
 
     #[test]
@@ -221,8 +244,10 @@ mod tests {
         let issue_id = db.create_issue("Test issue", None, "medium").unwrap();
         db.close_issue(issue_id).unwrap();
 
-        let result = run(&db, issue_id);
-        assert!(result.is_ok());
+        run(&db, issue_id).unwrap();
+        let issue = db.get_issue(issue_id).unwrap().unwrap();
+        assert_eq!(issue.status, "closed");
+        assert!(issue.closed_at.is_some());
     }
 
     #[test]
@@ -232,8 +257,10 @@ mod tests {
         let milestone_id = db.create_milestone("v1.0", None).unwrap();
         db.add_issue_to_milestone(milestone_id, issue_id).unwrap();
 
-        let result = run(&db, issue_id);
-        assert!(result.is_ok());
+        run(&db, issue_id).unwrap();
+        let milestone = db.get_issue_milestone(issue_id).unwrap();
+        assert!(milestone.is_some());
+        assert_eq!(milestone.unwrap().name, "v1.0");
     }
 
     #[test]
@@ -245,8 +272,12 @@ mod tests {
         db.add_comment(issue_id, "评论 🎉").unwrap();
         db.add_label(issue_id, "バグ").unwrap();
 
-        let result = run(&db, issue_id);
-        assert!(result.is_ok());
+        run(&db, issue_id).unwrap();
+        let issue = db.get_issue(issue_id).unwrap().unwrap();
+        assert_eq!(issue.title, "测试问题 🐛");
+        assert_eq!(issue.description, Some("描述 αβγ".to_string()));
+        let labels = db.get_labels(issue_id).unwrap();
+        assert!(labels.contains(&"バグ".to_string()));
     }
 
     #[test]
@@ -255,8 +286,9 @@ mod tests {
         let desc = "Line 1\nLine 2\n\nLine 4 after blank";
         let issue_id = db.create_issue("Test", Some(desc), "medium").unwrap();
 
-        let result = run(&db, issue_id);
-        assert!(result.is_ok());
+        run(&db, issue_id).unwrap();
+        let issue = db.get_issue(issue_id).unwrap().unwrap();
+        assert_eq!(issue.description, Some(desc.to_string()));
     }
 
     #[test]
@@ -264,8 +296,9 @@ mod tests {
         let (db, _dir) = setup_test_db();
         let issue_id = db.create_issue("Test", Some(""), "medium").unwrap();
 
-        let result = run(&db, issue_id);
-        assert!(result.is_ok());
+        run(&db, issue_id).unwrap();
+        let issue = db.get_issue(issue_id).unwrap().unwrap();
+        assert_eq!(issue.description, Some("".to_string()));
     }
 
     // ==================== Property-Based Tests ====================

@@ -161,30 +161,41 @@ mod tests {
     #[test]
     fn test_run_no_issues() {
         let (db, _dir) = setup_test_db();
-
-        let result = run(&db);
-        assert!(result.is_ok());
+        run(&db).unwrap();
+        let ready = db.list_ready_issues().unwrap();
+        assert!(ready.is_empty());
     }
 
     #[test]
     fn test_run_with_issues() {
         let (db, _dir) = setup_test_db();
-        db.create_issue("Issue 1", None, "high").unwrap();
+        let id = db.create_issue("Issue 1", None, "high").unwrap();
 
-        let result = run(&db);
-        assert!(result.is_ok());
+        run(&db).unwrap();
+        let ready = db.list_ready_issues().unwrap();
+        assert_eq!(ready.len(), 1);
+        assert_eq!(ready[0].id, id);
     }
 
     #[test]
     fn test_run_prioritizes_higher() {
         let (db, _dir) = setup_test_db();
         db.create_issue("Low priority", None, "low").unwrap();
-        db.create_issue("Critical priority", None, "critical")
+        let critical_id = db
+            .create_issue("Critical priority", None, "critical")
             .unwrap();
         db.create_issue("Medium priority", None, "medium").unwrap();
 
-        let result = run(&db);
-        assert!(result.is_ok());
+        run(&db).unwrap();
+        // Verify the critical issue has the highest weight via the scoring function
+        let ready = db.list_ready_issues().unwrap();
+        assert_eq!(ready.len(), 3);
+        let critical = ready.iter().find(|i| i.id == critical_id).unwrap();
+        assert_eq!(critical.priority, "critical");
+        // Critical should have highest weight
+        assert_eq!(priority_weight("critical"), 4);
+        assert!(priority_weight("critical") > priority_weight("low"));
+        assert!(priority_weight("critical") > priority_weight("medium"));
     }
 
     #[test]
@@ -224,8 +235,16 @@ mod tests {
         let blocked = db.create_issue("Blocked", None, "critical").unwrap();
         db.add_dependency(blocked, blocker).unwrap();
 
-        let result = run(&db);
-        assert!(result.is_ok());
+        run(&db).unwrap();
+        let ready = db.list_ready_issues().unwrap();
+        assert!(
+            !ready.iter().any(|i| i.id == blocked),
+            "Blocked issue should not be in ready list"
+        );
+        assert!(
+            ready.iter().any(|i| i.id == blocker),
+            "Blocker should be in ready list"
+        );
     }
 
     #[test]
@@ -234,8 +253,12 @@ mod tests {
         let id = db.create_issue("Done", None, "medium").unwrap();
         db.close_issue(id).unwrap();
 
-        let result = run(&db);
-        assert!(result.is_ok());
+        run(&db).unwrap();
+        let ready = db.list_ready_issues().unwrap();
+        assert!(
+            ready.is_empty(),
+            "Closed issues should not appear in ready list"
+        );
     }
 
     proptest! {

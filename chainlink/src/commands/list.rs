@@ -95,8 +95,9 @@ mod tests {
     #[test]
     fn test_run_empty() {
         let (db, _dir) = setup_test_db();
-        let result = run(&db, None, None, None);
-        assert!(result.is_ok());
+        run(&db, None, None, None).unwrap();
+        let issues = db.list_issues(None, None, None).unwrap();
+        assert!(issues.is_empty());
     }
 
     #[test]
@@ -106,8 +107,9 @@ mod tests {
         db.create_issue("Issue 2", None, "medium").unwrap();
         db.create_issue("Issue 3", None, "low").unwrap();
 
-        let result = run(&db, None, None, None);
-        assert!(result.is_ok());
+        run(&db, None, None, None).unwrap();
+        let issues = db.list_issues(None, None, None).unwrap();
+        assert_eq!(issues.len(), 3);
     }
 
     #[test]
@@ -147,8 +149,11 @@ mod tests {
         let id2 = db.create_issue("Closed issue", None, "medium").unwrap();
         db.close_issue(id2).unwrap();
 
-        let result = run(&db, Some("all"), None, None);
-        assert!(result.is_ok());
+        run(&db, Some("all"), None, None).unwrap();
+        let issues = db.list_issues(Some("all"), None, None).unwrap();
+        assert_eq!(issues.len(), 2);
+        assert!(issues.iter().any(|i| i.id == id1));
+        assert!(issues.iter().any(|i| i.id == id2));
     }
 
     #[test]
@@ -227,23 +232,17 @@ mod tests {
         let (db, _dir) = setup_test_db();
         db.create_issue("Issue", None, "medium").unwrap();
 
-        let result = run(&db, None, Some("nonexistent-label"), None);
-        assert!(result.is_ok());
+        run(&db, None, Some("nonexistent-label"), None).unwrap();
+        let issues = db
+            .list_issues(None, Some("nonexistent-label"), None)
+            .unwrap();
+        assert!(
+            issues.is_empty(),
+            "No issues should match nonexistent label"
+        );
     }
 
     proptest! {
-        #[test]
-        fn truncate_never_panics(s in ".*", max_chars in 1usize..200) {
-            let _ = truncate(&s, max_chars);
-        }
-
-        #[test]
-        fn truncate_result_is_valid_utf8(s in ".*", max_chars in 4usize..100) {
-            let result = truncate(&s, max_chars);
-            // If we can iterate chars, it's valid UTF-8
-            let _ = result.chars().count();
-        }
-
         #[test]
         fn truncate_respects_max_chars(s in ".{10,100}", max_chars in 5usize..50) {
             let result = truncate(&s, max_chars);
@@ -265,21 +264,14 @@ mod tests {
         }
 
         #[test]
-        fn prop_run_never_panics(count in 0usize..5) {
+        fn prop_run_filter_correctness(priority in "low|medium|high|critical") {
             let (db, _dir) = setup_test_db();
-            for i in 0..count {
-                db.create_issue(&format!("Issue {}", i), None, "medium").unwrap();
-            }
-            let result = run(&db, None, None, None);
-            prop_assert!(result.is_ok());
-        }
+            db.create_issue("Match", None, &priority).unwrap();
+            db.create_issue("Other", None, "low").unwrap();
 
-        #[test]
-        fn prop_run_with_filters(status in "open|closed|all", priority in "low|medium|high|critical") {
-            let (db, _dir) = setup_test_db();
-            db.create_issue("Test", None, &priority).unwrap();
-            let result = run(&db, Some(&status), None, Some(&priority));
-            prop_assert!(result.is_ok());
+            run(&db, None, None, Some(&priority)).unwrap();
+            let filtered = db.list_issues(None, None, Some(&priority)).unwrap();
+            prop_assert!(filtered.iter().all(|i| i.priority == priority));
         }
     }
 }
