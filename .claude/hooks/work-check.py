@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-PreToolUse hook that nudges when no active working issue is set.
-Runs before Write|Edit|Bash to remind about issue tracking.
+PreToolUse hook that blocks Write|Edit|Bash unless a chainlink issue
+is being actively worked on. Forces issue creation before code changes.
 """
 
 import json
@@ -12,6 +12,16 @@ import io
 
 # Fix Windows encoding issues
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+
+# Bash commands that are always allowed (read-only / chainlink management)
+ALLOWED_BASH_PREFIXES = [
+    "chainlink ",
+    "git status", "git diff", "git log", "git branch", "git show",
+    "cargo test", "cargo build", "cargo check", "cargo clippy", "cargo fmt",
+    "npm test", "npm run", "npx ",
+    "tsc", "node ", "python ",
+    "ls", "dir", "pwd", "echo",
+]
 
 
 def find_chainlink_dir():
@@ -42,6 +52,15 @@ def run_chainlink(args):
         return None
 
 
+def is_allowed_bash(input_data):
+    """Check if a Bash command is on the allow list (read-only/infra)."""
+    command = input_data.get("tool_input", {}).get("command", "").strip()
+    for prefix in ALLOWED_BASH_PREFIXES:
+        if command.startswith(prefix):
+            return True
+    return False
+
+
 def main():
     try:
         input_data = json.load(sys.stdin)
@@ -53,6 +72,10 @@ def main():
     if tool_name not in ('Write', 'Edit', 'Bash'):
         sys.exit(0)
 
+    # Allow read-only / infrastructure Bash commands through
+    if tool_name == 'Bash' and is_allowed_bash(input_data):
+        sys.exit(0)
+
     chainlink_dir = find_chainlink_dir()
     if not chainlink_dir:
         sys.exit(0)
@@ -60,21 +83,23 @@ def main():
     # Check session status
     status = run_chainlink(["session", "status"])
     if not status:
+        # chainlink not available — don't block
         sys.exit(0)
 
-    # If already working on something, no nudge needed
+    # If already working on an issue, allow
     if "Working on: #" in status:
         sys.exit(0)
 
-    # Check if there are open issues to work on
-    open_issues = run_chainlink(["list", "-s", "open"])
-    if not open_issues or "No issues found" in open_issues:
-        # No open issues - might need to create one, but don't block
-        sys.exit(0)
-
-    # Soft nudge: working on nothing but there are open issues
-    print("Reminder: No active working issue. Run `chainlink session work <id>` or `chainlink quick \"title\"` to track your work.")
-    sys.exit(0)
+    # BLOCK: no active work item
+    print(
+        "BLOCKED: No active chainlink issue. "
+        "Create and work on an issue before making changes.\n\n"
+        "  chainlink quick \"<describe your task>\" -p <priority> -l <label>\n\n"
+        "Or pick an existing issue:\n"
+        "  chainlink list -s open\n"
+        "  chainlink session work <id>"
+    )
+    sys.exit(2)
 
 
 if __name__ == "__main__":
