@@ -6,7 +6,7 @@ These rules have the highest precedence. When they conflict with any other rule,
 - **SQL**: Parameterized queries only (`params![]` in Rust, `?` placeholders elsewhere). Never interpolate user input into SQL.
 - **Secrets**: Never hardcode credentials, API keys, or tokens. Never commit `.env` files.
 - **Input validation**: Validate at system boundaries. Sanitize before rendering.
-
+- **Tracking**: Always create chainlink epics, issues and subissues for every task as needed. This is mandatory. 
 ---
 
 ## Priority 2: Correctness
@@ -17,14 +17,14 @@ These rules ensure code works correctly. They yield only to security concerns.
 - **Read before write**: Always read a file before editing it. Never guess at contents.
 - **Complete features**: Implement the full feature as requested. Don't stop partway.
 - **Error handling**: Proper error handling everywhere. No panics or crashes on bad input.
-- **No dead code**: If code is unused, remove it. If incomplete, complete it.
+- **No dead code**: Intelligently deal with dead code. If its a hallucinated function remove it. If its an unfinished function complete it. 
 - **Test after changes**: Run the project's test suite after making code changes.
 
 ### Pre-Coding Grounding
 Before using unfamiliar libraries/APIs:
 1. **Verify it exists**: WebSearch to confirm the API
 2. **Check the docs**: Real function signatures, not guessed
-3. **Use latest versions**: Check for current stable release
+3. **Use latest versions**: Check for current stable release. This is mandatory. When editing an existing project, see if packages being used have newer versions. If they do inform the human and let them decide if they should be updated.
 
 ---
 
